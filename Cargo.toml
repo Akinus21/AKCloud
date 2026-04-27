@@ -1,0 +1,58 @@
+[package]
+name = "aktags-cloud"
+version = "0.1.0"
+edition = "2021"
+authors = ["AKTags"]
+description = "AKCloud - Self-hosted file sync and tagging server"
+license = "MIT"
+
+[[bin]]
+name = "aktags-cloud"
+path = "src/main.rs"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+axum = { version = "0.7", features = ["multipart", "macros"] }
+tower = "0.4"
+tower-http = { version = "0.5", features = ["fs", "auth", "cors", "trace"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = { version = "0.32", features = ["bundled"] }
+notify = "7"
+notify-debouncer-mini = "0.5"
+sha2 = "0.10"
+md-5 = "0.10"
+hex = "0.4"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+jsonwebtoken = "9"
+rand = "0.8"
+bcrypt = "0.15"
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-appender = "0.2"
+parking_lot = "0.12"
+once_cell = "1"
+rust-embed = "8"
+directories = "5"
+toml = "0.8"
+
+# P2P sync
+quinn = "0.11"
+rustls = "0.23"
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+x25519-dalek = "2"
+mdns-sd = "0.12"
+
+# Graveyard / compression
+zstd = "0.13"
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+anyhow = "1"
+
+# Delta sync
+# fast_rsync = "0.2"  # Not yet available on crates.io, implement custom later
+
+[build-dependencies]

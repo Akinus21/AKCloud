@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  akcloud:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: aktags/akcloud:latest
+    container_name: akcloud
+    ports:
+      - "8080:8080"
+      - "22000:22000"
+    volumes:
+      - ./config:/config
+      - storage:/data
+      - ./graveyard:/graveyard
+    environment:
+      - RUST_LOG=info
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - akcloud
+
+volumes:
+  storage:
+    driver: local
+
+networks:
+  akcloud:
+    driver: bridge
