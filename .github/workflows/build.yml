@@ -1,0 +1,36 @@
+```yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: rust-action/rust-toolchain@master
+        with:
+          toolchain: stable
+          target: x86_64-unknown-linux-gnu
+
+      - name: Build project
+        run: cargo build --release
+
+      - name: Increment Git Tag
+        if: success()
+        run: |
+          git add -A
+          git commit -m "chore: Increment version"
+          GIT_SSH_COMMAND="ssh -i /config/.ssh/github -o StrictHostKeyChecking=no" git tag -a v$(git describe --tags --abbrev=0)
+          GIT_SSH_COMMAND="ssh -i /config/.ssh/github -o StrictHostKeyChecking=no" git push origin v$(git describe --tags --abbrev=0)
+
+      - name: Send Build Status to Webhook
+        if: success()
+        with:
+          url: ${{ secrets.WEBHOOK_URL }}
+          secret: ${{ secrets.WEBHOOK_SECRET }}
+          status: success
+          message: |
+            Build completed successfully.
+            Full logs: ${{ steps.build.outputs.log }}
+        shell: bash
+```
