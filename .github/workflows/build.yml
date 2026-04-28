@@ -33,9 +33,9 @@ jobs:
       - name: Verify binary
         id: verify
         run: |
-          if [ -f target/release/akcloud ]; then
+          if [ -f target/release/aktags-cloud ]; then
             echo "Binary found"
-            echo "sha256=$(sha256sum target/release/akcloud | awk '{print $1}')" >> $GITHUB_OUTPUT
+            echo "sha256=$(sha256sum target/release/aktags-cloud | awk '{print $1}')" >> $GITHUB_OUTPUT
           else
             echo "Binary not found"
             exit 1
