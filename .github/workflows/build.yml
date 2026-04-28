@@ -73,4 +73,3 @@ jobs:
             -H "Content-Type: application/json" \
             -d "$PAYLOAD" \
             https://webhook.akinus21.com/webhook/akcloud-build
-```
