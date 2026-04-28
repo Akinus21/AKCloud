@@ -1,5 +1,5 @@
 ```markdown
-# AKCloud - Agent Instructions
+# AKCloud Rust Refactor - Agent Instructions
 
 ## Overview
 
@@ -22,7 +22,7 @@ Since gh CLI is not authenticated, use SSH directly:
 cd /home/akinus/dockge-stacks/dev-stack/projects/AKCloud
 git add -A
 git commit -m "<description>"
-GIT_SSH_COMMAND="ssh -i /config/.ssh/github -o StrictHostKeyChecking=no" git push origin main
+GIT_SSH_COMMAND="ssh -i /home/akinus/.ssh/github -o StrictHostKeyChecking=no" git push origin main
 ```
 
 **IMPORTANT: Always push to GitHub after making and verifying changes.**
@@ -45,21 +45,22 @@ AKCloud/
 ├── README.md
 ├── AGENTS.md
 └── src/
-    ├── db.rs          # Database interactions
-    ├── graveyard.rs   # Graveyard management
-    ├── server.rs      # API server implementation
-    ├── web.rs         # Web UI serving
+    ├── db.rs
+    ├── graveyard.rs
+    ├── server.rs
+    ├── tagger.rs
+    ├── web.rs
+    ├── config.rs
     ├── sync/
-    │   ├── mod.rs      # Sync module
-    │   ├── identity.rs # Identity management
-    │   └── discovery.rs # Peer discovery
-    ├── config.rs      # Configuration loading
-    ├── tagger.rs      # File hashing and tagging
+    │   ├── mod.rs
+    │   ├── identity.rs
+    │   ├── discovery.rs
+    │   └── ...
 ```
 
 ## Module Structure
 
-Modules are stored in `~/.akcloud/modules/`:
+Modules are stored in `~/.aktools/modules/`:
 - Each module is a folder
 - Contains `manifest.xml` with metadata
 - May contain scripts or resources
@@ -82,4 +83,30 @@ Modules are stored in `~/.akcloud/modules/`:
 - `<executable>`: Path to script (empty for command-only modules)
 - `<flag>`: Command-line flag to match
 - `<command>`: Command(s) to execute when flag is used
+
+## Key Files
+
+*   `src/db.rs`: Database interaction logic.
+*   `src/graveyard.rs`: Handles deleted files.
+*   `src/server.rs`:  Handles HTTP requests.
+*   `src/tagger.rs`: File hashing and tagging logic.
+*   `src/web.rs`:  Serves the web UI.
+*   `src/config.rs`: Configuration management.
+*   `src/sync/mod.rs`:  P2P sync logic.
+*   `src/sync/identity.rs`: Manages node identities.
+*   `src/sync/discovery.rs`: Handles peer discovery.
+
+## Build Commands
+
+```bash
+cargo build --release
+```
+
+## Conventions
+
+*   Use Rust's standard library and common crates.
+*   Follow the Rust style guide (https://doc.rust-lang.org/rust-by-example/).
+*   Write clear and concise code.
+*   Use comprehensive tests.
+*   Document code thoroughly.
 ```

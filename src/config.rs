@@ -40,6 +40,7 @@ pub struct ApiKey {
 #[serde(rename_all = "kebab-case")]
 pub struct StorageConfig {
     pub watch_paths: Vec<PathBuf>,
+    pub upload_path: PathBuf,
     pub db_path: PathBuf,
 }
 
@@ -86,6 +87,7 @@ impl Default for Config {
             },
             storage: StorageConfig {
                 watch_paths: vec![PathBuf::from("/data/storage")],
+                upload_path: PathBuf::from("/data/storage"),
                 db_path: home.join("aktags.db"),
             },
             sync: SyncConfig {

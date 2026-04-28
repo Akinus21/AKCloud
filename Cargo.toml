@@ -12,7 +12,10 @@ path = "src/main.rs"
 
 [dependencies]
 tokio = { version = "1", features = ["full"] }
-axum = { version = "0.7", features = ["multipart", "macros"] }
+axum = { version = "0.7", features = ["multipart"] }
+futures-util = "0.3"
+tokio-util = "0.7"
+bytes = "1"
 tower = "0.4"
 tower-http = { version = "0.5", features = ["fs", "auth", "cors", "trace"] }
 serde = { version = "1", features = ["derive"] }
