@@ -31,39 +31,45 @@ jobs:
         continue-on-error: true
 
       - name: Verify binary
+        id: verify
         run: |
-          ls -la target/release/akcloud || echo "Binary not found"
+          if [ -f target/release/akcloud ]; then
+            echo "Binary found"
+            echo "sha256=$(sha256sum target/release/akcloud | awk '{print $1}')" >> $GITHUB_OUTPUT
+          else
+            echo "Binary not found"
+            exit 1
+          fi
 
-      - name: Increment tag
-        if-no-files-found: error
+      - name: Get latest tag
+        id: tag
+        if: success()
         run: |
           git fetch --tags
-          git describe --tags --abbrev=0
-          echo "new_tag=vX.X.X" >> $GITHUB_OUTPUT
+          latest=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "latest=$latest" >> $GITHUB_OUTPUT
 
       - name: Create release tag and upload
-        if-no-files-found: error
+        if: success()
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git tag $GITHUB_OUTPUT_new_tag
-          git push origin $GITHUB_OUTPUT_new_tag
-          gh release create v$GITHUB_OUTPUT_new_tag --title "$GITHUB_OUTPUT_new_tag" --body "Release build" --binary target/release/akcloud
-          sha256_checksum=$(sha256sum target/release/akcloud | awk '{print $1}')
-          echo "sha256=$sha256_checksum" >> $GITHUB_OUTPUT
-          echo "new_tag=$GITHUB_OUTPUT_new_tag" >> $GITHUB_OUTPUT
+          echo "new_tag=v1.0.1" >> $GITHUB_OUTPUT
+          git tag v1.0.1
+          git push origin v1.0.1
+          gh release create v1.0.1 --title "v1.0.1" --body "Release build"
 
       - name: Webhook notification
-        if-no-files-found: error
+        if: success()
         env:
           PAYLOAD: |
             {
               "run_url": "https://github.com/Akinus21/AKCloud/actions/runs/${{ github.run_id }}",
               "sha": "${{ github.sha }}",
-              "commit_msg": "...",
+              "commit_msg": "${{ github.event.head_commit.message }}",
               "ref": "${{ github.ref_name }}",
               "actor": "${{ github.actor }}",
-              "errors": "<last 200 lines of build.log as json string>"
+              "status": "success"
             }
           WEBHOOK_SECRET: ${{ secrets.WEBHOOK_HMAC_SECRET }}
         run: |
