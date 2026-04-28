@@ -57,7 +57,7 @@ jobs:
           echo "new_tag=v1.0.1" >> $GITHUB_OUTPUT
           git tag v1.0.1
           git push origin v1.0.1
-          gh release create v1.0.1 --title "v1.0.1" --body "Release build"
+          gh release create v1.0.1 --title "v1.0.1" --notes "Release build"
 
       - name: Webhook notification
         if: success()
