@@ -47,7 +47,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git fetch --tags
-          latest=$(git describe --tags --abbrev=0)
+          latest=$(git describe --tags --abbrev=0 --always)
+          echo "Latest tag: $latest"
           major=$(echo $latest | cut -d. -f1 | tr -d 'v')
           minor=$(echo $latest | cut -d. -f2)
           patch=$(echo $latest | cut -d. -f3)
@@ -58,7 +59,7 @@ jobs:
           git push origin $new_tag
           gh release create $new_tag --title "$new_tag" --notes "Release build"
 
-      - name: Webhook notification
+      - name: Webhook notification on success
         if: success()
         env:
           PAYLOAD: |
@@ -75,6 +76,27 @@ jobs:
           curl -X POST \
             -H "X-Hub-Signature-256: ${{ hashFiles('.github/workflows/build.yml') }}" \
             -H "X-GitHub-Event: build_success" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD" \
+            https://webhook.akinus21.com/webhook/akcloud-build
+
+      - name: Webhook notification on failure
+        if: failure()
+        env:
+          PAYLOAD: |
+            {
+              "run_url": "https://github.com/Akinus21/AKCloud/actions/runs/${{ github.run_id }}",
+              "sha": "${{ github.sha }}",
+              "commit_msg": "${{ github.event.head_commit.message }}",
+              "ref": "${{ github.ref_name }}",
+              "actor": "${{ github.actor }}",
+              "status": "failure"
+            }
+          WEBHOOK_SECRET: ${{ secrets.WEBHOOK_HMAC_SECRET }}
+        run: |
+          curl -X POST \
+            -H "X-Hub-Signature-256: ${{ hashFiles('.github/workflows/build.yml') }}" \
+            -H "X-GitHub-Event: build_failure" \
             -H "Content-Type: application/json" \
             -d "$PAYLOAD" \
             https://webhook.akinus21.com/webhook/akcloud-build
