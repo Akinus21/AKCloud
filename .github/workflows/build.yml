@@ -41,23 +41,22 @@ jobs:
             exit 1
           fi
 
-      - name: Get latest tag
-        id: tag
-        if: success()
-        run: |
-          git fetch --tags
-          latest=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-          echo "latest=$latest" >> $GITHUB_OUTPUT
-
       - name: Create release tag and upload
         if: success()
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "new_tag=v1.0.1" >> $GITHUB_OUTPUT
-          git tag v1.0.1
-          git push origin v1.0.1
-          gh release create v1.0.1 --title "v1.0.1" --notes "Release build"
+          git fetch --tags
+          latest=$(git describe --tags --abbrev=0)
+          major=$(echo $latest | cut -d. -f1 | tr -d 'v')
+          minor=$(echo $latest | cut -d. -f2)
+          patch=$(echo $latest | cut -d. -f3)
+          new_minor=$((minor + 1))
+          new_tag="v${major}.${new_minor}.0"
+          echo "new_tag=$new_tag" >> $GITHUB_OUTPUT
+          git tag $new_tag
+          git push origin $new_tag
+          gh release create $new_tag --title "$new_tag" --notes "Release build"
 
       - name: Webhook notification
         if: success()
