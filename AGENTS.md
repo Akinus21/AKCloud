@@ -1,112 +1,150 @@
-```markdown
-# AKCloud Rust Refactor - Agent Instructions
+# AKCloud – Agent Instructions
 
 ## Overview
+**AKCloud** is a self‑hosted file‑sync and tagging server written in Rust.  
+It provides:
 
-This is the Rust rewrite of AKCloud - a self-hosted file sync and tagging server.
+* A REST API for uploading, downloading, and searching files.  
+* Automatic hashing (SHA‑256) and optional MD5 for duplicate detection.  
+* A “graveyard” for soft‑deleted objects with compression (zstd).  
+* Peer‑to‑peer sync via a lightweight discovery service.  
+* Configurable storage, logging, and networking.
 
-## Building
+All builds are performed in CI (GitHub Actions) using the Rust toolchain.  
+Local developers should **not** install Rust globally; rely on the CI for compilation and binary distribution.
 
-**IMPORTANT: Do NOT install Rust locally.** GitHub Actions handles all building automatically. The CI workflow builds the binary and reports any errors back to you.
+---
 
-If you need to verify code changes without building:
-1. Review the code logic manually
-2. Check for syntax errors by reading the files
-3. Push to GitHub and wait for the build results
+## Build System
+
+| Item                | Value |
+|---------------------|-------|
+| Build system        | Rust (cargo) |
+| Build command       | `cargo build --release` |
+| Binary name         | `akcloud` |
+| Binary location     | `target/release/akcloud` |
+| Version source       | `Cargo.toml` |
+| Homebrew tap        | *(none configured)* |
+| Webhook endpoint    | `https://webhook.akinus21.com/webhook/akcloud-build` |
+
+**Important:** The CI workflow automatically runs the above command, packages the binary, and pushes it to the webhook URL. Do **not** run `cargo install` locally.
+
+If you need to verify a change without waiting for CI:
+
+1. Run `cargo check` to catch syntax errors.  
+2. Run `cargo test` (if tests exist).  
+3. Push the commit and let CI report the final build status.
+
+---
 
 ## Git Push Workflow
 
-Since gh CLI is not authenticated, use SSH directly:
+The `gh` CLI is not authenticated on the host, so push via SSH directly.
 
 ```bash
 cd /home/akinus/dockge-stacks/dev-stack/projects/AKCloud
 git add -A
-git commit -m "<description>"
-GIT_SSH_COMMAND="ssh -i /home/akinus/.ssh/github -o StrictHostKeyChecking=no" git push origin main
+git commit -m "<description of changes>"
+GIT_SSH_COMMAND="ssh -i /home/akinus/.ssh/github -o StrictHostKeyChecking=no" \
+git push origin main
 ```
 
-**IMPORTANT: Always push to GitHub after making and verifying changes.**
+- **SSH key:** `/home/akinus/.ssh/github`  
+- **Repository:** `git@github.com:Akinus21/AKCloud.git`
 
-## Documentation Updates
+> **Always push** after making and reviewing changes. CI will build the binary and report any failures.
 
-**IMPORTANT: Update README.md when adding new features or changing existing features.**
+---
 
-The README should reflect:
-- New commands added
-- Changed command behavior
-- Updated installation instructions
-- New use cases or examples
+## Secrets & Configuration
+
+| Secret / File                              | Location |
+|--------------------------------------------|----------|
+| Git SSH key                                 | `/home/akinus/.ssh/github` |
+| Project‑specific secrets (DB paths, tokens) | `/home/akinus/dockge-stacks/dev-stack/.secrets` |
+| GitHub webhook secret (not set)             | – (run `gh secret set WEBHOOK_SECRET` if needed) |
+| GitHub webhook URL                         | `https://webhook.akinus21.com/webhook/akcloud-build` |
+
+When adding new environment variables or secret values, store them in the `.secrets` file and reference them via the `Config` struct (`src/config.rs`).
+
+---
 
 ## Project Structure
 
 ```
 AKCloud/
-├── Cargo.toml
+├── Cargo.toml                     # Crate manifest, version, dependencies
+├── Cargo.lock
+├── AGENTS.md                     # ← This file
 ├── README.md
-├── AGENTS.md
-└── src/
-    ├── db.rs
-    ├── graveyard.rs
-    ├── server.rs
-    ├── tagger.rs
-    ├── web.rs
-    ├── config.rs
-    ├── sync/
-    │   ├── mod.rs
-    │   ├── identity.rs
-    │   ├── discovery.rs
-    │   └── ...
+├── src/
+│   ├── main.rs                   # Entry point, CLI parsing (clap)
+│   ├── config.rs                 # Configuration structs & loader
+│   ├── db.rs                     # SQLite wrapper, FileRecord, TagRecord, Stats
+│   ├── tagger.rs                 # Hashing utilities (SHA‑256, MD5) & type guessing
+│   ├── server.rs                 # Axum HTTP server, routes, multipart handling
+│   ├── web.rs                    # Embedded UI (index.html)
+│   ├── graveyard.rs              # Soft‑delete handling, compression (zstd)
+│   └── sync/
+│       ├── mod.rs                # Sync orchestrator
+│       ├── identity.rs           # Ed25519 key management
+│       └── discovery.rs          # Peer discovery service
+├── tests/                        # Integration tests (if any)
+└── .github/
+    └── workflows/
+        └── ci.yml               # CI: cargo build, test, publish binary
 ```
 
-## Module Structure
+### Key Files Explained
 
-Modules are stored in `~/.aktools/modules/`:
-- Each module is a folder
-- Contains `manifest.xml` with metadata
-- May contain scripts or resources
+| File | Purpose |
+|------|---------|
+| `src/main.rs` | CLI definition (`clap`), logging init (`tracing_subscriber`), starts HTTP server and optional sync service. |
+| `src/config.rs` | Loads configuration from `$HOME/.config/akcloud/*.toml` (or defaults). Defines `Config`, `ServerConfig`, `StorageConfig`, `SyncConfig`, `GraveyardConfig`, `LoggingConfig`. |
+| `src/db.rs` | Thin wrapper around `rusqlite`. Provides `Database` struct with CRUD for files, tags, and statistics. |
+| `src/tagger.rs` | Async hash computation (`compute_file_hash`, `compute_file_md5`) and simple MIME‑type guessing. |
+| `src/server.rs` | Axum router: upload (`POST /files`), download (`GET /files/:id`), delete, tag operations, health checks. |
+| `src/graveyard.rs` | Handles “deleted” objects: stores original hash, compresses data with `zstd`, and tracks retention. |
+| `src/sync/identity.rs` | Generates/loads Ed25519 key pair for signed peer communication. |
+| `src/sync/discovery.rs` | In‑memory peer list with periodic broadcast/heartbeat. |
+| `src/sync/mod.rs` | Entry point for the P2P sync daemon; spawns discovery and future transport layers. |
 
-### manifest.xml Format
+---
 
-```xml
-<?xml version="1.0"?>
-<module>
-    <name>modulename</name>
-    <alias>alias</alias>
-    <executable>./script.sh</executable>
-    <option>
-        <flag>flagname</flag>
-        <command>command to run</command>
-    </option>
-</module>
-```
+## Coding Conventions
 
-- `<executable>`: Path to script (empty for command-only modules)
-- `<flag>`: Command-line flag to match
-- `<command>`: Command(s) to execute when flag is used
+1. **Formatting** – Run `cargo fmt` before committing.  
+2. **Linting** – Run `cargo clippy -- -D warnings` to keep the codebase warning‑free.  
+3. **Error handling** – Use `anyhow::Result` for fallible functions; add context with `.context("...")`.  
+4. **Async** – All I/O (file, network) should be async (`tokio`). Avoid blocking calls inside async contexts.  
+5. **Logging** – Use `tracing` macros (`info!`, `debug!`, `error!`). Initialize subscriber in `main.rs`.  
+6. **Database** – All DB interactions go through the `Database` wrapper; use prepared statements (`params!`).  
+7. **Security** – Never log raw file contents or secret keys. Store private keys (`identity.key`) with permissions `600`.  
+8. **Testing** – Prefer unit tests in the same module (`#[cfg(test)]`). Add integration tests under `tests/` for API endpoints.  
 
-## Key Files
+---
 
-*   `src/db.rs`: Database interaction logic.
-*   `src/graveyard.rs`: Handles deleted files.
-*   `src/server.rs`:  Handles HTTP requests.
-*   `src/tagger.rs`: File hashing and tagging logic.
-*   `src/web.rs`:  Serves the web UI.
-*   `src/config.rs`: Configuration management.
-*   `src/sync/mod.rs`:  P2P sync logic.
-*   `src/sync/identity.rs`: Manages node identities.
-*   `src/sync/discovery.rs`: Handles peer discovery.
+## Deployment Checklist
 
-## Build Commands
+- [ ] Increment version in `Cargo.toml` (`cargo release` can automate).  
+- [ ] Verify `config.toml` (or environment overrides) are correct for the target environment.  
+- [ ] Ensure the `.secrets` file contains any new keys/tokens and is **not** committed.  
+- [ ] Push to `main`; CI will build `target/release/akcloud` and POST to the webhook URL.  
+- [ ] After CI succeeds, restart the service on the host (e.g., `systemctl restart akcloud`).  
 
-```bash
-cargo build --release
-```
+---
 
-## Conventions
+## FAQ
 
-*   Use Rust's standard library and common crates.
-*   Follow the Rust style guide (https://doc.rust-lang.org/rust-by-example/).
-*   Write clear and concise code.
-*   Use comprehensive tests.
-*   Document code thoroughly.
-```
+**Q: I need to add a new environment variable for the sync service.**  
+A: Add it to `Config::SyncConfig` in `src/config.rs`, update the TOML schema, and reference it via `config.sync.<var>`.
+
+**Q: The webhook secret is missing.**  
+A: Run `gh secret set WEBHOOK_SECRET -b"<your-secret>"` in the repository context, then re‑run the CI pipeline.
+
+**Q: How do I generate a new identity key?**  
+A: Delete `identity.key` from the config directory and restart the server; `Identity::load_or_generate` will create a fresh Ed25519 key pair.
+
+--- 
+
+*End of AGENTS.md*

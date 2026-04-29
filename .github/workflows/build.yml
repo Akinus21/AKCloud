@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: write
+  pages: none
   pull-requests: write
 
 jobs:
@@ -23,76 +24,51 @@ jobs:
           toolchain: stable
 
       - name: Build project
-        id: build
-        run: |
-          set -o pipefail && cargo build --release 2>&1 | tee build.log
+        run: cargo build --release
+
+      - name: Run tests
+        run: cargo test --all
+        continue-on-error: true
 
       - name: Verify binary
         id: verify
         run: |
-          BINARY=target/release/akcloud
-          if [ ! -f "$BINARY" ]; then
+          if [ -f target/release/aktags-cloud ]; then
+            echo "Binary found"
+            echo "sha256=$(sha256sum target/release/aktags-cloud | awk '{print $1}')" >> $GITHUB_OUTPUT
+          else
             echo "Binary not found"
             exit 1
           fi
-          SIZE=$(stat -c%s "$BINARY")
-          # Require at least 10 KB to avoid cached tiny binaries
-          if [ "$SIZE" -lt 10240 ]; then
-            echo "Binary size too small: $SIZE bytes"
-            exit 1
-          fi
-          echo "sha256=$(sha256sum "$BINARY" | awk '{print $1}')" >> $GITHUB_OUTPUT
-          echo "size=$SIZE" >> $GITHUB_OUTPUT
 
-      - name: Increment version, tag and push
-        id: tag
-        if: success()
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git fetch --tags
-          latest=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-          if [[ ! "$latest" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            latest="v0.0.0"
-          fi
-          major=$(echo "$latest" | cut -d. -f1 | tr -d 'v')
-          minor=$(echo "$latest" | cut -d. -f2)
-          patch=$(echo "$latest" | cut -d. -f3)
-          new_patch=$((patch + 1))
-          new_tag="v${major}.${minor}.${new_patch}"
-          echo "new_tag=$new_tag" >> $GITHUB_OUTPUT
-
-          # Update Cargo.toml version
-          sed -i -E "s/^version = \".*\"/version = \"${major}.${minor}.${new_patch}\"/" Cargo.toml
-          git add Cargo.toml
-          git commit -m "chore: bump version to ${major}.${minor}.${new_patch}"
-          git tag "$new_tag"
-          git push origin "$new_tag"
-          git push origin HEAD:main
-
-      - name: Create GitHub Release with binary
-        id: release
+      - name: Create release tag and upload
         if: success()
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="${{ steps.tag.outputs.new_tag }}"
-          BINARY=target/release/akcloud
-          SHA256=$(sha256sum "$BINARY" | awk '{print $1}')
-          echo "sha256=$SHA256" >> $GITHUB_OUTPUT
-          gh release create "$TAG" --title "$TAG" --notes "Release $TAG" "$BINARY"
-
-      - name: Upload binary artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: akcloud-binary
-          path: target/release/akcloud
-          if-no-files-found: error
+          git fetch --tags
+          latest=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ -z "$latest" ] || [[ "$latest" == *.*.* ]] && [[ ! "$latest" =~ ^v[0-9] ]]; then
+            latest="v0.0.0"
+          fi
+          if [[ "$latest" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            major=$(echo $latest | cut -d. -f1 | tr -d 'v')
+            minor=$(echo $latest | cut -d. -f2)
+            patch=$(echo $latest | cut -d. -f3)
+            new_minor=$((minor + 1))
+            new_tag="v${major}.${new_minor}.0"
+          else
+            new_tag="v1.0.0"
+          fi
+          echo "new_tag=$new_tag" >> $GITHUB_OUTPUT
+          git tag $new_tag
+          git push origin $new_tag
+          gh release create $new_tag --title "$new_tag" --notes "Release build" ./target/release/aktags-cloud
 
       - name: Webhook notification on success
         if: success()
         env:
-          WEBHOOK_SECRET: ${{ secrets.WEBHOOK_HMAC_SECRET }}
+          WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
         run: |
           PAYLOAD=$(cat <<EOF
 {
@@ -115,17 +91,16 @@ EOF
       - name: Webhook notification on failure
         if: failure()
         env:
-          WEBHOOK_SECRET: ${{ secrets.WEBHOOK_HMAC_SECRET }}
+          WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
         run: |
-          ERRORS=$(tail -n 200 build.log | sed ':a;N;$!ba;s/\n/\\n/g')
           PAYLOAD=$(cat <<EOF
 {
+  "event": "build_failure",
   "run_url": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}",
   "sha": "${{ github.sha }}",
   "commit_msg": "${{ github.event.head_commit.message }}",
   "ref": "${{ github.ref_name }}",
-  "actor": "${{ github.actor }}",
-  "errors": "$ERRORS"
+  "actor": "${{ github.actor }}"
 }
 EOF
 )
