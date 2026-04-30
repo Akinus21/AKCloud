@@ -251,6 +251,7 @@ async fn upload_file(
     mut multipart: Multipart,
 ) -> impl IntoResponse {
     let upload_path = state.config.storage.upload_path.clone();
+    tokio::fs::create_dir_all(&upload_path).await.ok();
 
     loop {
         let field = match multipart.next_field().await {
