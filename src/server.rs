@@ -1,7 +1,7 @@
 use anyhow::Result;
 use axum::{
     body::Body,
-    extract::{Multipart, Path, Query, State},
+    extract::{DefaultBodyLimit, Multipart, Path, Query, State},
     response::{Html, IntoResponse, Response},
     routing::{delete, get, post, put},
     Json, Router,
@@ -47,6 +47,7 @@ let app = Router::new()
         .route("/api/sync/files/:path", post(sync_upload_file))
         .route("/api/sync/files/:path", get(sync_download_file))
         
+        .layer(DefaultBodyLimit::max(1024 * 1024 * 500))
         .with_state(state);
 
     Ok(app)
@@ -258,8 +259,8 @@ async fn upload_file(
         let data = match field.bytes().await {
             Ok(d) => d,
             Err(e) => {
-                tracing::error!("Failed to read field: {}", e);
-                return Json(json!({ "error": format!("Failed to read field: {}", e) })).into_response();
+                tracing::error!("Failed to read field: {:?}", e);
+                return Json(json!({ "error": format!("Failed to read field: {:?}", e) })).into_response();
             }
         };
 
