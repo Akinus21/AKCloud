@@ -361,7 +361,7 @@
             const fileId = state.selectedFile.id;
             for (const tag of tags) {
                 try {
-                    await fetch(`/api/file-tags/${encodeURIComponent(state.selectedFile.name)}/${encodeURIComponent(tag)}`, { method: 'PUT' });
+                    await fetch(`/api/file-tags/${encodeURIComponent(state.selectedFile.path)}/${encodeURIComponent(tag)}`, { method: 'PUT' });
                 } catch (e) { console.error(e); }
             }
             input.value = '';
@@ -371,7 +371,7 @@
 
         async function panelRemoveTag(fileId, tagName) {
             try {
-                await fetch(`/api/file-tags/${encodeURIComponent(state.selectedFile.name)}/${encodeURIComponent(tagName)}`, { method: 'DELETE' });
+                await fetch(`/api/file-tags/${encodeURIComponent(state.selectedFile.path)}/${encodeURIComponent(tagName)}`, { method: 'DELETE' });
             } catch (e) { console.error(e); }
             await loadPanelTags(fileId);
         }
@@ -379,7 +379,7 @@
         function panelDownload() {
             if (!state.selectedFile) return;
             const link = document.createElement('a');
-            link.href = `/api/file/${encodeURIComponent(state.selectedFile.name)}/download`;
+            link.href = `/api/file/${encodeURIComponent(state.selectedFile.path)}/download`;
             link.download = state.selectedFile.name;
             link.click();
         }
@@ -388,7 +388,7 @@
             if (!state.selectedFile) return;
             if (!confirm('Delete "' + state.selectedFile.name + '"?')) return;
             try {
-                await fetch(`/api/file/${encodeURIComponent(state.selectedFile.name)}`, { method: 'DELETE' });
+                await fetch(`/api/file/${encodeURIComponent(state.selectedFile.path)}`, { method: 'DELETE' });
                 showToast('Deleted: ' + state.selectedFile.name);
                 closeFilePanel();
                 await loadFiles();
@@ -483,7 +483,7 @@
                     if (data.success) {
                         showToast('Uploaded: ' + data.filename);
                         for (const tag of tags) {
-                            await fetch(`/api/file-tags/${encodeURIComponent(data.filename)}/${encodeURIComponent(tag)}`, { method: 'PUT' }).catch(e => console.error(e));
+                            await fetch(`/api/file-tags/${encodeURIComponent(data.path)}/${encodeURIComponent(tag)}`, { method: 'PUT' }).catch(e => console.error(e));
                         }
                     } else {
                         showToast(data.error || 'Upload failed', 'error');
