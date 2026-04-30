@@ -1,7 +1,7 @@
 use anyhow::Result;
+use md5::{Digest as Md5Digest, Md5};
+use sha2::{Digest, Sha256};
 use std::path::Path;
-use sha2::{Sha256, Digest};
-use md5::{Md5, Digest as Md5Digest};
 
 pub async fn compute_file_hash(path: &Path) -> Result<String> {
     let bytes = tokio::fs::read(path).await?;
@@ -27,31 +27,24 @@ pub fn guess_file_type(name: &str) -> Option<String> {
         "jpg" | "jpeg" | "png" | "gif" | "webp" | "svg" | "bmp" | "ico" | "tiff" | "tif" => {
             Some("image".to_string())
         }
-        "mp4" | "mkv" | "avi" | "mov" | "wmv" | "flv" | "webm" | "m4v" => {
-            Some("video".to_string())
-        }
-        "mp3" | "wav" | "flac" | "aac" | "ogg" | "wma" | "m4a" => {
-            Some("audio".to_string())
-        }
+        "mp4" | "mkv" | "avi" | "mov" | "wmv" | "flv" | "webm" | "m4v" => Some("video".to_string()),
+        "mp3" | "wav" | "flac" | "aac" | "ogg" | "wma" | "m4a" => Some("audio".to_string()),
         "pdf" | "doc" | "docx" | "txt" | "rtf" | "odt" | "xls" | "xlsx" | "ppt" | "pptx" => {
             Some("document".to_string())
         }
-        "zip" | "tar" | "gz" | "rar" | "7z" | "bz2" | "xz" => {
-            Some("archive".to_string())
-        }
-        "rs" | "js" | "ts" | "py" | "go" | "java" | "c" | "cpp" | "h" | "hpp" | "cs" | "rb" | "php" | "swift" | "kt" => {
-            Some("code".to_string())
-        }
-        "html" | "css" | "scss" | "sass" | "less" | "json" | "xml" | "yaml" | "yml" | "toml" | "md" => {
-            Some("web".to_string())
-        }
+        "zip" | "tar" | "gz" | "rar" | "7z" | "bz2" | "xz" => Some("archive".to_string()),
+        "rs" | "js" | "ts" | "py" | "go" | "java" | "c" | "cpp" | "h" | "hpp" | "cs" | "rb"
+        | "php" | "swift" | "kt" => Some("code".to_string()),
+        "html" | "css" | "scss" | "sass" | "less" | "json" | "xml" | "yaml" | "yml" | "toml"
+        | "md" => Some("web".to_string()),
         _ => None,
     }
 }
 
 pub fn suggest_tags(name: &Path) -> Vec<String> {
     let mut tags = Vec::new();
-    let name_lower = name.file_name()
+    let name_lower = name
+        .file_name()
         .map(|n| n.to_string_lossy().to_lowercase())
         .unwrap_or_default();
 

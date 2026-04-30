@@ -1,5 +1,5 @@
-use std::path::PathBuf;
 use std::net::IpAddr;
+use std::path::PathBuf;
 
 fn get_home_dir() -> PathBuf {
     std::env::var("HOME")

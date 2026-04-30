@@ -21,33 +21,26 @@ use crate::tagger::compute_file_hash;
 pub async fn create_router(db: Database, config: Config) -> Result<Router> {
     let state = Arc::new(AppState { db, config });
 
-let app = Router::new()
+    let app = Router::new()
         .route("/", get(serve_index))
         .route("/health", get(health_check))
-
         .route("/api/files", get(list_files))
         .route("/api/files", post(upload_file))
         .route("/api/files/search", get(search_files))
         .route("/api/files/tag/:tag", get(list_files_by_tag))
-
         .route("/api/file/:id", get(get_file))
         .route("/api/file/:id/tags", get(get_file_tags))
         .route("/api/file/:id/download", get(download_file))
         .route("/api/file/:id", delete(delete_file))
-
         .route("/api/tags", get(list_tags))
         .route("/api/tags", post(create_tag))
         .route("/api/tags/:name", delete(remove_tag))
-
         .route("/api/file-tags/:file_id/:tag", put(tag_file))
         .route("/api/file-tags/:file_id/:tag", delete(untag_file))
-
         .route("/api/stats", get(get_stats))
-
         .route("/api/sync/manifest", get(get_sync_manifest))
         .route("/api/sync/files/:path", post(sync_upload_file))
         .route("/api/sync/files/:path", get(sync_download_file))
-        
         .layer(DefaultBodyLimit::max(1024 * 1024 * 500))
         .with_state(state);
 
@@ -125,7 +118,8 @@ async fn list_files_by_tag(
         Ok(files) => Json(json!({
             "files": files,
             "total": files.len() as i64,
-        })).into_response(),
+        }))
+        .into_response(),
         Err(e) => {
             tracing::error!("Error listing files by tag: {}", e);
             Json(json!({ "error": e.to_string() })).into_response()
@@ -166,9 +160,7 @@ async fn get_file_tags(
     }
 }
 
-async fn list_tags(
-    State(state): State<Arc<AppState>>,
-) -> impl IntoResponse {
+async fn list_tags(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     match state.db.list_tags().await {
         Ok(tags) => Json(tags).into_response(),
         Err(e) => {
@@ -238,9 +230,7 @@ async fn untag_file(
     }
 }
 
-async fn get_stats(
-    State(state): State<Arc<AppState>>,
-) -> impl IntoResponse {
+async fn get_stats(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     match state.db.get_stats().await {
         Ok(stats) => Json(stats).into_response(),
         Err(e) => {
@@ -250,9 +240,7 @@ async fn get_stats(
     }
 }
 
-async fn get_sync_manifest(
-    State(state): State<Arc<AppState>>,
-) -> impl IntoResponse {
+async fn get_sync_manifest(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     match state.db.get_manifest().await {
         Ok(manifest) => {
             let items: Vec<_> = manifest.into_iter().map(|(path, hash, size, mtime)| {
@@ -280,7 +268,8 @@ async fn upload_file(
             Ok(None) => break,
             Err(e) => {
                 tracing::error!("Multipart error: {:?}", e);
-                return Json(json!({ "error": format!("Multipart error: {:?}", e) })).into_response();
+                return Json(json!({ "error": format!("Multipart error: {:?}", e) }))
+                    .into_response();
             }
         };
         let filename = field.file_name().unwrap_or("unknown").to_string();
@@ -290,7 +279,8 @@ async fn upload_file(
             Ok(d) => d,
             Err(e) => {
                 tracing::error!("Failed to read field: {:?}", e);
-                return Json(json!({ "error": format!("Failed to read field: {:?}", e) })).into_response();
+                return Json(json!({ "error": format!("Failed to read field: {:?}", e) }))
+                    .into_response();
             }
         };
 
@@ -298,13 +288,15 @@ async fn upload_file(
             Ok(f) => f,
             Err(e) => {
                 tracing::error!("Failed to create file: {}", e);
-                return Json(json!({ "error": format!("Failed to create file: {}", e) })).into_response();
+                return Json(json!({ "error": format!("Failed to create file: {}", e) }))
+                    .into_response();
             }
         };
 
         if let Err(e) = file.write_all(&data).await {
             tracing::error!("Failed to write data: {}", e);
-            return Json(json!({ "error": format!("Failed to write data: {}", e) })).into_response();
+            return Json(json!({ "error": format!("Failed to write data: {}", e) }))
+                .into_response();
         }
 
         let path_str = filepath.to_string_lossy().to_string();
@@ -312,16 +304,25 @@ async fn upload_file(
             Ok(h) => h,
             Err(e) => {
                 tracing::error!("Failed to hash file: {}", e);
-                return Json(json!({ "error": format!("Failed to hash file: {}", e) })).into_response();
+                return Json(json!({ "error": format!("Failed to hash file: {}", e) }))
+                    .into_response();
             }
         };
 
         let metadata = std::fs::metadata(&filepath).unwrap();
         let size = metadata.len() as i64;
-        let mtime = metadata.modified().unwrap()
-            .duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64;
+        let mtime = metadata
+            .modified()
+            .unwrap()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
 
-        match state.db.upsert_file(&path_str, &filename, size, &hash, mtime).await {
+        match state
+            .db
+            .upsert_file(&path_str, &filename, size, &hash, mtime)
+            .await
+        {
             Ok(file_id) => {
                 tracing::info!("Uploaded file: {} (id: {})", filename, file_id);
                 return Json(json!({
@@ -330,11 +331,13 @@ async fn upload_file(
                     "filename": filename,
                     "path": path_str,
                     "hash": hash
-                })).into_response();
+                }))
+                .into_response();
             }
             Err(e) => {
                 tracing::error!("Failed to save file record: {}", e);
-                return Json(json!({ "error": format!("Failed to save file record: {}", e) })).into_response();
+                return Json(json!({ "error": format!("Failed to save file record: {}", e) }))
+                    .into_response();
             }
         }
     }
@@ -348,7 +351,7 @@ async fn download_file(
 ) -> impl IntoResponse {
     let upload_path = state.config.storage.upload_path.clone();
     let filepath = upload_path.join(&id);
-    
+
     if !filepath.exists() {
         return Json(json!({ "error": "File not found" })).into_response();
     }
@@ -361,7 +364,8 @@ async fn download_file(
         }
     };
 
-    let filename = filepath.file_name()
+    let filename = filepath
+        .file_name()
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_else(|| "file".to_string());
 
@@ -370,10 +374,15 @@ async fn download_file(
 
     IntoResponse::into_response(
         Response::builder()
-            .header("Content-Disposition", format!("attachment; filename=\"{}\"", filename))
+            .header(
+                "Content-Disposition",
+                format!("attachment; filename=\"{}\"", filename),
+            )
             .header("Content-Type", "application/octet-stream")
             .body(body)
-            .unwrap_or_else(|_| Json(json!({ "error": "Failed to build response" })).into_response())
+            .unwrap_or_else(|_| {
+                Json(json!({ "error": "Failed to build response" })).into_response()
+            }),
     )
 }
 
@@ -388,7 +397,8 @@ async fn sync_upload_file(
     if let Some(parent) = filepath.parent() {
         if let Err(e) = tokio::fs::create_dir_all(parent).await {
             tracing::error!("Failed to create directory: {}", e);
-            return Json(json!({ "error": format!("Failed to create directory: {}", e) })).into_response();
+            return Json(json!({ "error": format!("Failed to create directory: {}", e) }))
+                .into_response();
         }
     }
 
@@ -397,7 +407,8 @@ async fn sync_upload_file(
             Ok(d) => d,
             Err(e) => {
                 tracing::error!("Failed to read field: {}", e);
-                return Json(json!({ "error": format!("Failed to read field: {}", e) })).into_response();
+                return Json(json!({ "error": format!("Failed to read field: {}", e) }))
+                    .into_response();
             }
         };
 
@@ -405,26 +416,37 @@ async fn sync_upload_file(
             Ok(f) => f,
             Err(e) => {
                 tracing::error!("Failed to create file: {}", e);
-                return Json(json!({ "error": format!("Failed to create file: {}", e) })).into_response();
+                return Json(json!({ "error": format!("Failed to create file: {}", e) }))
+                    .into_response();
             }
         };
 
         if let Err(e) = file.write_all(&data).await {
             tracing::error!("Failed to write data: {}", e);
-            return Json(json!({ "error": format!("Failed to write data: {}", e) })).into_response();
+            return Json(json!({ "error": format!("Failed to write data: {}", e) }))
+                .into_response();
         }
 
-        let filename = filepath.file_name()
+        let filename = filepath
+            .file_name()
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_else(|| path.clone());
 
         let hash = compute_file_hash(&filepath).await.unwrap_or_default();
         let metadata = std::fs::metadata(&filepath).unwrap();
         let size = metadata.len() as i64;
-        let mtime = metadata.modified().unwrap()
-            .duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64;
+        let mtime = metadata
+            .modified()
+            .unwrap()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
 
-        state.db.upsert_file(&path, &filename, size, &hash, mtime).await.ok();
+        state
+            .db
+            .upsert_file(&path, &filename, size, &hash, mtime)
+            .await
+            .ok();
 
         return Json(json!({ "success": true, "hash": hash })).into_response();
     }
@@ -458,6 +480,8 @@ async fn sync_download_file(
         Response::builder()
             .header("Content-Type", "application/octet-stream")
             .body(body)
-            .unwrap_or_else(|_| Json(json!({ "error": "Failed to build response" })).into_response())
+            .unwrap_or_else(|_| {
+                Json(json!({ "error": "Failed to build response" })).into_response()
+            }),
     )
 }

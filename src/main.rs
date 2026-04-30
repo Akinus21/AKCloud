@@ -1,18 +1,18 @@
-use clap::Parser;
 use anyhow::Result;
+use clap::Parser;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 pub mod config;
 pub mod db;
-pub mod tagger;
-pub mod server;
-pub mod web;
-pub mod sync;
 pub mod graveyard;
+pub mod server;
+pub mod sync;
+pub mod tagger;
+pub mod web;
 
-use config::{Config, get_config_dir};
+use config::{get_config_dir, Config};
 use server::create_router;
 
 #[derive(Debug, Clone, Parser)]
@@ -43,7 +43,9 @@ pub enum Commands {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    let config_path = cli.config.unwrap_or_else(|| get_config_dir().join("config.toml"));
+    let config_path = cli
+        .config
+        .unwrap_or_else(|| get_config_dir().join("config.toml"));
     let mut config = Config::load(&config_path).map_err(|e| anyhow::anyhow!("{}", e))?;
 
     if let Some(port) = cli.port {

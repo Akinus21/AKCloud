@@ -3,7 +3,7 @@ use chrono::{Duration, Utc};
 use parking_lot::Mutex;
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
-use sha2::{Sha256, Digest};
+use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use zstd::encode_all;
@@ -39,7 +39,8 @@ impl GraveyardManager {
         let db_path = config.path.join("graveyard.db");
         let conn = Connection::open(&db_path)?;
 
-        conn.execute_batch(r#"
+        conn.execute_batch(
+            r#"
             CREATE TABLE IF NOT EXISTS entries (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 original_path TEXT NOT NULL,
@@ -57,7 +58,8 @@ impl GraveyardManager {
             );
             CREATE INDEX IF NOT EXISTS idx_entries_path ON entries(original_path);
             CREATE INDEX IF NOT EXISTS idx_entries_expires ON entries(expires_at);
-        "#)?;
+        "#,
+        )?;
 
         Ok(Self {
             conn: Arc::new(Mutex::new(conn)),
@@ -88,7 +90,7 @@ impl GraveyardManager {
 
         let compressed = encode_all(content.as_slice(), 3)?;
         let compressed_bytes = compressed.len() as i64;
-        
+
         std::fs::write(&obj_path, &compressed)?;
 
         let now = Utc::now();
@@ -184,13 +186,11 @@ impl GraveyardManager {
 
         let conn = self.conn.lock();
 
-        let mut stmt = conn.prepare(
-            "SELECT id, object_hash FROM entries WHERE expires_at < ?1"
-        )?;
-        
-        let expired: Vec<(i64, String)> = stmt.query_map(params![now], |row| {
-            Ok((row.get(0)?, row.get(1)?))
-        })?.collect::<Result<Vec<_>, _>>()?;
+        let mut stmt = conn.prepare("SELECT id, object_hash FROM entries WHERE expires_at < ?1")?;
+
+        let expired: Vec<(i64, String)> = stmt
+            .query_map(params![now], |row| Ok((row.get(0)?, row.get(1)?)))?
+            .collect::<Result<Vec<_>, _>>()?;
 
         let mut deleted = 0;
         for (id, object_hash) in expired {
@@ -221,26 +221,27 @@ impl GraveyardManager {
     pub fn get_versions(&self, original_path: &str) -> Result<Vec<GraveyardEntry>> {
         let conn = self.conn.lock();
 
-        let mut stmt = conn.prepare(
-            "SELECT * FROM entries WHERE original_path = ?1 ORDER BY replaced_at DESC"
-        )?;
+        let mut stmt = conn
+            .prepare("SELECT * FROM entries WHERE original_path = ?1 ORDER BY replaced_at DESC")?;
 
-        let entries = stmt.query_map(params![original_path], |row| {
-            Ok(GraveyardEntry {
-                id: row.get(0)?,
-                original_path: row.get(1)?,
-                object_hash: row.get(2)?,
-                original_hash: row.get(3)?,
-                size_bytes: row.get(4)?,
-                compressed_bytes: row.get(5)?,
-                replaced_by: row.get(6)?,
-                replaced_at: row.get(7)?,
-                peer_node_id: row.get(8)?,
-                expires_at: row.get(9)?,
-                tags: row.get(10)?,
-                summary: row.get(11)?,
-            })
-        })?.collect::<Result<Vec<_>, _>>()?;
+        let entries = stmt
+            .query_map(params![original_path], |row| {
+                Ok(GraveyardEntry {
+                    id: row.get(0)?,
+                    original_path: row.get(1)?,
+                    object_hash: row.get(2)?,
+                    original_hash: row.get(3)?,
+                    size_bytes: row.get(4)?,
+                    compressed_bytes: row.get(5)?,
+                    replaced_by: row.get(6)?,
+                    replaced_at: row.get(7)?,
+                    peer_node_id: row.get(8)?,
+                    expires_at: row.get(9)?,
+                    tags: row.get(10)?,
+                    summary: row.get(11)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
 
         Ok(entries)
     }

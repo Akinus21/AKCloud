@@ -22,7 +22,7 @@ impl DiscoveryService {
 
     pub fn register_peer(&self, node_id: String, display_name: Option<String>, addr: SocketAddr) {
         let mut peers = self.peers.write();
-        
+
         if let Some(existing) = peers.iter_mut().find(|p| p.node_id == node_id) {
             existing.addr = addr;
             existing.last_seen = std::time::Instant::now();
@@ -44,7 +44,9 @@ impl DiscoveryService {
     }
 
     pub fn get_peer(&self, node_id: &str) -> Option<Peer> {
-        self.peers.read().iter()
+        self.peers
+            .read()
+            .iter()
             .find(|p| p.node_id == node_id)
             .cloned()
     }

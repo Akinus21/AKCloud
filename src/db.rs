@@ -1,10 +1,10 @@
 use anyhow::{Context, Result};
+use chrono::{DateTime, Utc};
+use parking_lot::Mutex;
 use rusqlite::{params, Connection, OptionalExtension};
+use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::Arc;
-use parking_lot::Mutex;
-use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileRecord {
@@ -67,10 +67,11 @@ impl Database {
             std::fs::create_dir_all(parent)?;
         }
 
-        let conn = Connection::open(path)
-            .context("Failed to open database")?;
+        let conn = Connection::open(path).context("Failed to open database")?;
 
-        conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA busy_timeout=5000;")?;
+        conn.execute_batch(
+            "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA busy_timeout=5000;",
+        )?;
 
         Ok(Self {
             conn: Arc::new(Mutex::new(conn)),
@@ -190,7 +191,14 @@ impl Database {
         Ok(())
     }
 
-    pub async fn upsert_file(&self, path: &str, name: &str, size: i64, hash: &str, mtime: i64) -> Result<i64> {
+    pub async fn upsert_file(
+        &self,
+        path: &str,
+        name: &str,
+        size: i64,
+        hash: &str,
+        mtime: i64,
+    ) -> Result<i64> {
         let conn = self.conn.lock();
         let now = Utc::now().to_rfc3339();
 
@@ -218,11 +226,13 @@ impl Database {
     pub async fn delete_file(&self, path: &str) -> Result<Option<i64>> {
         let conn = self.conn.lock();
 
-        let id: Option<i64> = conn.query_row(
-            "SELECT id FROM files WHERE path = ?1",
-            params![path],
-            |row| row.get(0),
-        ).optional()?;
+        let id: Option<i64> = conn
+            .query_row(
+                "SELECT id FROM files WHERE path = ?1",
+                params![path],
+                |row| row.get(0),
+            )
+            .optional()?;
 
         if let Some(id) = id {
             conn.execute("DELETE FROM files WHERE id = ?1", params![id])?;
@@ -238,7 +248,7 @@ impl Database {
             "SELECT id, path, name, size, hash, mtime, created_at, updated_at FROM files WHERE path = ?1",
             params![path],
             |row| {
-                Ok(FileRecord {
+            Ok(FileRecord {
                     id: row.get(0)?,
                     path: row.get(1)?,
                     name: row.get(2)?,
@@ -249,6 +259,8 @@ impl Database {
                     updated_at: row.get(7)?,
                     tags: Vec::new(),
                 })
+            },
+        ).optional()?;
 
         Ok(record)
     }
@@ -260,19 +272,21 @@ impl Database {
             "SELECT id, path, name, size, hash, mtime, created_at, updated_at FROM files WHERE hash = ?1"
         )?;
 
-        let records = stmt.query_map(params![hash], |row| {
-            Ok(FileRecord {
-                id: row.get(0)?,
-                path: row.get(1)?,
-                name: row.get(2)?,
-                size: row.get(3)?,
-                hash: row.get(4)?,
-                mtime: row.get(5)?,
-                created_at: row.get(6)?,
-                updated_at: row.get(7)?,
-                tags: Vec::new(),
-            })
-        })?.collect::<Result<Vec<_>, _>>()?;
+        let records = stmt
+            .query_map(params![hash], |row| {
+                Ok(FileRecord {
+                    id: row.get(0)?,
+                    path: row.get(1)?,
+                    name: row.get(2)?,
+                    size: row.get(3)?,
+                    hash: row.get(4)?,
+                    mtime: row.get(5)?,
+                    created_at: row.get(6)?,
+                    updated_at: row.get(7)?,
+                    tags: Vec::new(),
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
 
         Ok(records)
     }
@@ -282,27 +296,34 @@ impl Database {
 
         let mut stmt = conn.prepare(
             "SELECT id, path, name, size, hash, mtime, created_at, updated_at 
-             FROM files ORDER BY updated_at DESC LIMIT ?1 OFFSET ?2"
+             FROM files ORDER BY updated_at DESC LIMIT ?1 OFFSET ?2",
         )?;
 
-        let records = stmt.query_map(params![limit, offset], |row| {
-            Ok(FileRecord {
-                id: row.get(0)?,
-                path: row.get(1)?,
-                name: row.get(2)?,
-                size: row.get(3)?,
-                hash: row.get(4)?,
-                mtime: row.get(5)?,
-                created_at: row.get(6)?,
-                updated_at: row.get(7)?,
-                tags: Vec::new(),
-            })
-        })?.collect::<Result<Vec<_>, _>>()?;
+        let records = stmt
+            .query_map(params![limit, offset], |row| {
+                Ok(FileRecord {
+                    id: row.get(0)?,
+                    path: row.get(1)?,
+                    name: row.get(2)?,
+                    size: row.get(3)?,
+                    hash: row.get(4)?,
+                    mtime: row.get(5)?,
+                    created_at: row.get(6)?,
+                    updated_at: row.get(7)?,
+                    tags: Vec::new(),
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
 
         Ok(records)
     }
 
-    pub async fn list_files_by_tag(&self, tag_name: &str, limit: i64, offset: i64) -> Result<Vec<FileRecord>> {
+    pub async fn list_files_by_tag(
+        &self,
+        tag_name: &str,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<FileRecord>> {
         let conn = self.conn.lock();
 
         let mut stmt = conn.prepare(
@@ -312,22 +333,24 @@ impl Database {
                JOIN tags t ON ft.tag_id = t.id
                WHERE t.name = ?1
                ORDER BY f.updated_at DESC
-               LIMIT ?2 OFFSET ?3"#
+               LIMIT ?2 OFFSET ?3"#,
         )?;
 
-        let records = stmt.query_map(params![tag_name, limit, offset], |row| {
-            Ok(FileRecord {
-                id: row.get(0)?,
-                path: row.get(1)?,
-                name: row.get(2)?,
-                size: row.get(3)?,
-                hash: row.get(4)?,
-                mtime: row.get(5)?,
-                created_at: row.get(6)?,
-                updated_at: row.get(7)?,
-                tags: Vec::new(),
-            })
-        })?.collect::<Result<Vec<_>, _>>()?;
+        let records = stmt
+            .query_map(params![tag_name, limit, offset], |row| {
+                Ok(FileRecord {
+                    id: row.get(0)?,
+                    path: row.get(1)?,
+                    name: row.get(2)?,
+                    size: row.get(3)?,
+                    hash: row.get(4)?,
+                    mtime: row.get(5)?,
+                    created_at: row.get(6)?,
+                    updated_at: row.get(7)?,
+                    tags: Vec::new(),
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
 
         Ok(records)
     }
@@ -349,22 +372,24 @@ impl Database {
                JOIN files_fts fts ON f.id = fts.rowid
                WHERE files_fts MATCH ?1
                ORDER BY f.updated_at DESC
-               LIMIT ?2 OFFSET ?3"#
+               LIMIT ?2 OFFSET ?3"#,
         )?;
 
-        let files = stmt.query_map(params![search_query, limit, offset], |row| {
-            Ok(FileRecord {
-                id: row.get(0)?,
-                path: row.get(1)?,
-                name: row.get(2)?,
-                size: row.get(3)?,
-                hash: row.get(4)?,
-                mtime: row.get(5)?,
-                created_at: row.get(6)?,
-                updated_at: row.get(7)?,
-                tags: Vec::new(),
-            })
-        })?.collect::<Result<Vec<_>, _>>()?;
+        let files = stmt
+            .query_map(params![search_query, limit, offset], |row| {
+                Ok(FileRecord {
+                    id: row.get(0)?,
+                    path: row.get(1)?,
+                    name: row.get(2)?,
+                    size: row.get(3)?,
+                    hash: row.get(4)?,
+                    mtime: row.get(5)?,
+                    created_at: row.get(6)?,
+                    updated_at: row.get(7)?,
+                    tags: Vec::new(),
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
 
         Ok(SearchResult { files, total })
     }
@@ -397,19 +422,20 @@ impl Database {
     pub async fn list_tags(&self) -> Result<Vec<TagRecord>> {
         let conn = self.conn.lock();
 
-        let mut stmt = conn.prepare(
-            "SELECT id, name, color, count, created_at FROM tags ORDER BY name"
-        )?;
+        let mut stmt =
+            conn.prepare("SELECT id, name, color, count, created_at FROM tags ORDER BY name")?;
 
-        let records = stmt.query_map([], |row| {
-            Ok(TagRecord {
-                id: row.get(0)?,
-                name: row.get(1)?,
-                color: row.get(2)?,
-                count: row.get(3)?,
-                created_at: row.get(4)?,
-            })
-        })?.collect::<Result<Vec<_>, _>>()?;
+        let records = stmt
+            .query_map([], |row| {
+                Ok(TagRecord {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    color: row.get(2)?,
+                    count: row.get(3)?,
+                    created_at: row.get(4)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
 
         Ok(records)
     }
@@ -417,10 +443,7 @@ impl Database {
     pub async fn delete_tag(&self, name: &str) -> Result<bool> {
         let conn = self.conn.lock();
 
-        let deleted = conn.execute(
-            "DELETE FROM tags WHERE name = ?1",
-            params![name],
-        )?;
+        let deleted = conn.execute("DELETE FROM tags WHERE name = ?1", params![name])?;
 
         Ok(deleted > 0)
     }
@@ -458,11 +481,13 @@ impl Database {
     pub async fn untag_file(&self, file_id: i64, tag_name: &str) -> Result<()> {
         let conn = self.conn.lock();
 
-        let tag_id: Option<i64> = conn.query_row(
-            "SELECT id FROM tags WHERE name = ?1",
-            params![tag_name],
-            |row| row.get(0),
-        ).optional()?;
+        let tag_id: Option<i64> = conn
+            .query_row(
+                "SELECT id FROM tags WHERE name = ?1",
+                params![tag_name],
+                |row| row.get(0),
+            )
+            .optional()?;
 
         if let Some(tag_id) = tag_id {
             conn.execute(
@@ -487,18 +512,20 @@ impl Database {
                FROM tags t
                JOIN file_tags ft ON t.id = ft.tag_id
                WHERE ft.file_id = ?1
-               ORDER BY t.name"#
+               ORDER BY t.name"#,
         )?;
 
-        let records = stmt.query_map(params![file_id], |row| {
-            Ok(TagRecord {
-                id: row.get(0)?,
-                name: row.get(1)?,
-                color: row.get(2)?,
-                count: row.get(3)?,
-                created_at: row.get(4)?,
-            })
-        })?.collect::<Result<Vec<_>, _>>()?;
+        let records = stmt
+            .query_map(params![file_id], |row| {
+                Ok(TagRecord {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    color: row.get(2)?,
+                    count: row.get(3)?,
+                    created_at: row.get(4)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
 
         Ok(records)
     }
@@ -506,23 +533,15 @@ impl Database {
     pub async fn get_stats(&self) -> Result<Stats> {
         let conn = self.conn.lock();
 
-        let total_files: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM files",
-            [],
-            |row| row.get(0),
-        )?;
+        let total_files: i64 =
+            conn.query_row("SELECT COUNT(*) FROM files", [], |row| row.get(0))?;
 
-        let total_size: i64 = conn.query_row(
-            "SELECT COALESCE(SUM(size), 0) FROM files",
-            [],
-            |row| row.get(0),
-        )?;
+        let total_size: i64 =
+            conn.query_row("SELECT COALESCE(SUM(size), 0) FROM files", [], |row| {
+                row.get(0)
+            })?;
 
-        let total_tags: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM tags",
-            [],
-            |row| row.get(0),
-        )?;
+        let total_tags: i64 = conn.query_row("SELECT COUNT(*) FROM tags", [], |row| row.get(0))?;
 
         let untagged_files: i64 = conn.query_row(
             r#"SELECT COUNT(*) FROM files f 
@@ -542,18 +561,18 @@ impl Database {
     pub async fn get_manifest(&self) -> Result<Vec<(String, String, i64, i64)>> {
         let conn = self.conn.lock();
 
-        let mut stmt = conn.prepare(
-            "SELECT path, hash, size, mtime FROM files"
-        )?;
+        let mut stmt = conn.prepare("SELECT path, hash, size, mtime FROM files")?;
 
-        let records = stmt.query_map([], |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, i64>(2)?,
-                row.get::<_, i64>(3)?,
-            ))
-        })?.collect::<Result<Vec<_>, _>>()?;
+        let records = stmt
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, i64>(2)?,
+                    row.get::<_, i64>(3)?,
+                ))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
 
         Ok(records)
     }
@@ -561,11 +580,13 @@ impl Database {
     pub async fn get_setting(&self, key: &str) -> Result<Option<String>> {
         let conn = self.conn.lock();
 
-        let value: Option<String> = conn.query_row(
-            "SELECT value FROM settings WHERE key = ?1",
-            params![key],
-            |row| row.get(0),
-        ).optional()?;
+        let value: Option<String> = conn
+            .query_row(
+                "SELECT value FROM settings WHERE key = ?1",
+                params![key],
+                |row| row.get(0),
+            )
+            .optional()?;
 
         Ok(value)
     }
