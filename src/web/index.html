@@ -361,7 +361,7 @@
             const fileId = state.selectedFile.id;
             for (const tag of tags) {
                 try {
-                    await fetch(`/api/file-tags/${encodeURIComponent(state.selectedFile.path)}/${encodeURIComponent(tag)}`, { method: 'PUT' });
+                    await fetch(`/api/file-tags/${fileId}/${encodeURIComponent(tag)}`, { method: 'PUT' });
                 } catch (e) { console.error(e); }
             }
             input.value = '';
@@ -371,7 +371,7 @@
 
         async function panelRemoveTag(fileId, tagName) {
             try {
-                await fetch(`/api/file-tags/${encodeURIComponent(state.selectedFile.path)}/${encodeURIComponent(tagName)}`, { method: 'DELETE' });
+                await fetch(`/api/file-tags/${fileId}/${encodeURIComponent(tagName)}`, { method: 'DELETE' });
             } catch (e) { console.error(e); }
             await loadPanelTags(fileId);
         }
@@ -463,10 +463,10 @@
             pendingFiles = [];
 
             for (const file of files) {
+                let fileToUpload = file;
                 const dupCheck = await checkDuplicate(file.name);
                 if (dupCheck) {
                     const action = await showDuplicateModal(file.name);
-                    let fileToUpload = file;
                     if (action === 'skip') continue;
                     if (action === 'rename') {
                         const newName = await showRenameModal(file.name);
