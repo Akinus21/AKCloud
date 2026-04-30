@@ -452,14 +452,8 @@ impl Database {
         Ok(())
     }
 
-    pub async fn get_file_tags(&self, file_path: &str) -> Result<Vec<TagRecord>> {
+    pub async fn get_file_tags(&self, file_id: i64) -> Result<Vec<TagRecord>> {
         let conn = self.conn.lock();
-
-        let file_id: i64 = conn.query_row(
-            "SELECT id FROM files WHERE path = ?1",
-            params![file_path],
-            |row| row.get(0),
-        )?;
 
         let mut stmt = conn.prepare(
             r#"SELECT t.id, t.name, t.color, t.count, t.created_at

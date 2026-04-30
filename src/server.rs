@@ -134,9 +134,9 @@ async fn delete_file(
 
 async fn get_file_tags(
     State(state): State<Arc<AppState>>,
-    Path(id): Path<String>,
+    Path(id): Path<i64>,
 ) -> impl IntoResponse {
-    match state.db.get_file_tags(&id).await {
+    match state.db.get_file_tags(id).await {
         Ok(tags) => Json(tags).into_response(),
         Err(e) => {
             tracing::error!("Error getting file tags: {}", e);

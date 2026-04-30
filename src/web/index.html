@@ -261,7 +261,7 @@
 
         function getIcon(type) { return fileIcons[type] || '📄'; }
         function formatSize(bytes) { if (bytes < 1024) return bytes + ' B'; if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB'; if (bytes < 1024*1024*1024) return (bytes/(1024*1024)).toFixed(1) + ' MB'; return (bytes/(1024*1024*1024)).toFixed(1) + ' GB'; }
-        function formatDate(dateStr) { return new Date(dateStr + 'Z').toLocaleDateString(); }
+        function formatDate(dateStr) { return new Date((dateStr || '').replace(' ', 'T') + 'Z').toLocaleDateString(); }
 
         function showToast(message, type = 'success') {
             const toast = document.getElementById('toast');
