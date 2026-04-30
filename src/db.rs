@@ -248,7 +248,7 @@ impl Database {
             "SELECT id, path, name, size, hash, mtime, created_at, updated_at FROM files WHERE path = ?1",
             params![path],
             |row| {
-            Ok(FileRecord {
+                Ok(FileRecord {
                     id: row.get(0)?,
                     path: row.get(1)?,
                     name: row.get(2)?,
