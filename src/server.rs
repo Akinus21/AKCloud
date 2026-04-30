@@ -21,27 +21,28 @@ use crate::tagger::compute_file_hash;
 pub async fn create_router(db: Database, config: Config) -> Result<Router> {
     let state = Arc::new(AppState { db, config });
 
-    let app = Router::new()
+let app = Router::new()
         .route("/", get(serve_index))
         .route("/health", get(health_check))
-        
+
         .route("/api/files", get(list_files))
         .route("/api/files", post(upload_file))
         .route("/api/files/search", get(search_files))
+
         .route("/api/files/:id", get(get_file))
         .route("/api/files/:id/tags", get(get_file_tags))
         .route("/api/files/:path", delete(delete_file))
         .route("/api/files/:path/download", get(download_file))
-        
+
         .route("/api/tags", get(list_tags))
         .route("/api/tags", post(create_tag))
         .route("/api/tags/:name", delete(remove_tag))
-        
+
         .route("/api/file-tags/:path/:tag", put(tag_file))
         .route("/api/file-tags/:path/:tag", delete(untag_file))
-        
+
         .route("/api/stats", get(get_stats))
-        
+
         .route("/api/sync/manifest", get(get_sync_manifest))
         .route("/api/sync/files/:path", post(sync_upload_file))
         .route("/api/sync/files/:path", get(sync_download_file))
