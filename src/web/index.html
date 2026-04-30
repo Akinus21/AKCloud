@@ -283,10 +283,24 @@
                     url = '/api/files?limit=100';
                 }
                 const res = await fetch(url);
+                if (!res.ok) {
+                    grid.innerHTML = '<div class="empty">HTTP ' + res.status + ' on ' + url + '</div>';
+                    console.error('loadFiles HTTP error:', res.status, url);
+                    return;
+                }
                 const data = await res.json();
-                state.files = data.files || [];
+                console.log('loadFiles response:', url, data);
+                let files = Array.isArray(data) ? data : (Array.isArray(data.files) ? data.files : []);
+                if (data.error) {
+                    grid.innerHTML = '<div class="empty">Server error: ' + data.error + '</div>';
+                    return;
+                }
+                state.files = files;
                 renderFiles();
-            } catch (e) { grid.innerHTML = '<div class="empty">Error: ' + e + '</div>'; }
+            } catch (e) { 
+                grid.innerHTML = '<div class="empty">Error: ' + e + '</div>'; 
+                console.error('loadFiles exception:', e);
+            }
         }
 
         async function loadTags() {
@@ -431,8 +445,9 @@
         });
 
         function addTagFilter(tagName) {
-            if (!state.activeTagFilters.includes(tagName)) {
-                state.activeTagFilters.push(tagName);
+            const normalized = tagName.toLowerCase().trim();
+            if (!state.activeTagFilters.includes(normalized)) {
+                state.activeTagFilters.push(normalized);
                 renderFilterBar();
                 loadFiles();
             }

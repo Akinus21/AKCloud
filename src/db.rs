@@ -347,17 +347,17 @@ impl Database {
         );
 
         let lowered: Vec<String> = tag_names.iter().map(|t| t.to_lowercase()).collect();
-        let mut params_vec: Vec<&dyn rusqlite::ToSql> = lowered
+        let mut all_params: Vec<rusqlite::types::Value> = lowered
             .iter()
-            .map(|t| t as &dyn rusqlite::ToSql)
+            .map(|t| rusqlite::types::Value::Text(t.clone()))
             .collect();
-        params_vec.push(&n);
-        params_vec.push(&limit);
-        params_vec.push(&offset);
+        all_params.push(rusqlite::types::Value::Integer(n));
+        all_params.push(rusqlite::types::Value::Integer(limit));
+        all_params.push(rusqlite::types::Value::Integer(offset));
 
         let mut stmt = conn.prepare(&sql)?;
         let mut records: Vec<FileRecord> = stmt
-            .query_map(params_vec.as_slice(), |row| {
+            .query_map(rusqlite::params_from_iter(all_params.iter()), |row| {
                 Ok(FileRecord {
                     id: row.get(0)?,
                     path: row.get(1)?,
