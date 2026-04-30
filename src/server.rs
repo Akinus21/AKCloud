@@ -38,8 +38,8 @@ let app = Router::new()
         .route("/api/tags", post(create_tag))
         .route("/api/tags/:name", delete(remove_tag))
 
-        .route("/api/file-tags/:path/:tag", put(tag_file))
-        .route("/api/file-tags/:path/:tag", delete(untag_file))
+        .route("/api/file-tags/:file_id/:tag", put(tag_file))
+        .route("/api/file-tags/:file_id/:tag", delete(untag_file))
 
         .route("/api/stats", get(get_stats))
 
@@ -193,9 +193,9 @@ async fn remove_tag(
 
 async fn tag_file(
     State(state): State<Arc<AppState>>,
-    Path((path, tag)): Path<(String, String)>,
+    Path((file_id, tag)): Path<(i64, String)>,
 ) -> impl IntoResponse {
-    match state.db.tag_file(&path, &tag).await {
+    match state.db.tag_file(file_id, &tag).await {
         Ok(_) => Json(json!({ "tagged": true })).into_response(),
         Err(e) => {
             tracing::error!("Error tagging file: {}", e);
@@ -206,9 +206,9 @@ async fn tag_file(
 
 async fn untag_file(
     State(state): State<Arc<AppState>>,
-    Path((path, tag)): Path<(String, String)>,
+    Path((file_id, tag)): Path<(i64, String)>,
 ) -> impl IntoResponse {
-    match state.db.untag_file(&path, &tag).await {
+    match state.db.untag_file(file_id, &tag).await {
         Ok(_) => Json(json!({ "untagged": true })).into_response(),
         Err(e) => {
             tracing::error!("Error untagging file: {}", e);
@@ -303,19 +303,19 @@ async fn upload_file(
         match state.db.upsert_file(&path_str, &filename, size, &hash, mtime).await {
             Ok(file_id) => {
                 tracing::info!("Uploaded file: {} (id: {})", filename, file_id);
+                return Json(json!({
+                    "success": true,
+                    "id": file_id,
+                    "filename": filename,
+                    "path": path_str,
+                    "hash": hash
+                })).into_response();
             }
             Err(e) => {
                 tracing::error!("Failed to save file record: {}", e);
                 return Json(json!({ "error": format!("Failed to save file record: {}", e) })).into_response();
             }
         }
-
-        return Json(json!({
-            "success": true,
-            "filename": filename,
-            "path": path_str,
-            "hash": hash
-        })).into_response();
     }
 
     Json(json!({ "error": "No file provided" })).into_response()

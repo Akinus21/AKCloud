@@ -391,13 +391,12 @@ impl Database {
         Ok(deleted > 0)
     }
 
-    pub async fn tag_file(&self, file_path: &str, tag_name: &str) -> Result<()> {
+    pub async fn tag_file(&self, file_id: i64, tag_name: &str) -> Result<()> {
         let conn = self.conn.lock();
 
-        let file_id: i64 = conn.query_row(
-            "SELECT id FROM files WHERE path = ?1",
-            params![file_path],
-            |row| row.get(0),
+        conn.execute(
+            "INSERT INTO tags (name, color) VALUES (?1, '#6366f1') ON CONFLICT(name) DO NOTHING",
+            params![tag_name],
         )?;
 
         let tag_id: i64 = conn.query_row(
@@ -415,21 +414,15 @@ impl Database {
         )?;
 
         conn.execute(
-            "UPDATE tags SET count = count + 1 WHERE id = ?1",
+            "UPDATE tags SET count = (SELECT COUNT(*) FROM file_tags WHERE tag_id = ?1) WHERE id = ?1",
             params![tag_id],
         )?;
 
         Ok(())
     }
 
-    pub async fn untag_file(&self, file_path: &str, tag_name: &str) -> Result<()> {
+    pub async fn untag_file(&self, file_id: i64, tag_name: &str) -> Result<()> {
         let conn = self.conn.lock();
-
-        let file_id: Option<i64> = conn.query_row(
-            "SELECT id FROM files WHERE path = ?1",
-            params![file_path],
-            |row| row.get(0),
-        ).optional()?;
 
         let tag_id: Option<i64> = conn.query_row(
             "SELECT id FROM tags WHERE name = ?1",
@@ -437,7 +430,7 @@ impl Database {
             |row| row.get(0),
         ).optional()?;
 
-        if let (Some(file_id), Some(tag_id)) = (file_id, tag_id) {
+        if let Some(tag_id) = tag_id {
             conn.execute(
                 "DELETE FROM file_tags WHERE file_id = ?1 AND tag_id = ?2",
                 params![file_id, tag_id],
