@@ -44,6 +44,8 @@
         .sidebar-item:hover { background: var(--bg-tertiary); }
         .sidebar-item.active { background: var(--accent); }
         .count { background: var(--bg-tertiary); padding: 0.1rem 0.4rem; border-radius: 0.25rem; font-size: 0.75rem; }
+        .tag-remove-sidebar { cursor: pointer; font-size: 0.7rem; opacity: 0.5; margin-left: 0.25rem; }
+        .tag-remove-sidebar:hover { opacity: 1; color: var(--danger); }
         .content { flex: 1; padding: 1rem; overflow-y: auto; }
         .file-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
         .file-card { background: var(--bg-secondary); border-radius: 0.5rem; padding: 1rem; cursor: pointer; transition: transform 0.15s, border-color 0.15s; border: 2px solid transparent; }
@@ -318,13 +320,15 @@
             }).join('');
         }
 
-        function renderTags() {
-            document.getElementById('tags-list').innerHTML = state.tags.map(tag =>
-                `<div class="sidebar-item" onclick="addTagFilter('${tag.name.replace(/'/g, "\\'")}')">
-                    <span>${tag.name}</span><span class="count">${tag.count}</span>
-                </div>`
-            ).join('');
-        }
+        function renderTags() { document.getElementById('tags-list').innerHTML = state.tags.map(tag =>
+            `<div class="sidebar-item" onclick="addTagFilter('${tag.name.replace(/'/g, "\\'")}')">
+                <span>${tag.name}</span>
+                <span style="display:flex;align-items:center;gap:0.3rem;">
+                    <span class="count">${tag.count}</span>
+                    <span class="tag-remove" onclick="event.stopPropagation();deleteTag('${tag.name.replace(/'/g, "\\'")}')">✕</span>
+                </span>
+            </div>`
+        ).join(''); }
 
         // --- File Detail Panel ---
 
@@ -454,6 +458,16 @@
             bar.innerHTML = state.activeTagFilters.map(t =>
                 `<div class="filter-chip">${t}<span class="chip-remove" onclick="removeTagFilter('${t.replace(/'/g, "\\'")}')">✕</span></div>`
             ).join('');
+        }
+
+        async function deleteTag(tagName) {
+            if (!confirm('Delete tag "' + tagName + '" from all files?')) return;
+            try {
+                await fetch('/api/tags/' + encodeURIComponent(tagName), { method: 'DELETE' });
+                showToast('Tag deleted: ' + tagName);
+                await loadTags();
+                await loadFiles();
+            } catch (e) { showToast('Delete tag failed: ' + e, 'error'); }
         }
 
         // --- Upload Flow ---
@@ -669,7 +683,12 @@
         // --- Search ---
 
         document.getElementById('search').addEventListener('input', e => {
-            state.searchQuery = e.target.value;
+            const val = e.target.value.trim();
+            if (val.startsWith('#')) {
+                const tag = val.substring(1).trim().toLowerCase();
+                if (tag) { addTagFilter(tag); e.target.value = ''; return; }
+            }
+            state.searchQuery = val;
             clearTimeout(state.searchTimeout);
             state.searchTimeout = setTimeout(loadFiles, 300);
         });
