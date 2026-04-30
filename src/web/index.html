@@ -16,10 +16,11 @@
             --border: #475569;
             --success: #22c55e;
             --danger: #ef4444;
+            --warning: #f59e0b;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg-primary); color: var(--text-primary); height: 100vh; display: flex; flex-direction: column; }
-        header { background: var(--bg-secondary); border-bottom: 1px solid var(--border); padding: 0.75rem 1rem; display: flex; align-items: center; gap: 1rem; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg-primary); color: var(--text-primary); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        header { background: var(--bg-secondary); border-bottom: 1px solid var(--border); padding: 0.75rem 1rem; display: flex; align-items: center; gap: 1rem; flex-shrink: 0; z-index: 50; }
         .logo { font-weight: 700; font-size: 1.25rem; color: var(--accent); }
         .search { flex: 1; max-width: 500px; }
         .search input { width: 100%; padding: 0.5rem 1rem; border-radius: 0.5rem; border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-primary); font-size: 0.9rem; }
@@ -29,9 +30,14 @@
         .btn-primary { background: var(--accent); color: white; }
         .btn-primary:hover { background: var(--accent-hover); }
         .btn-secondary { background: var(--bg-tertiary); color: var(--text-primary); }
+        .btn-secondary:hover { background: var(--border); }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-danger:hover { opacity: 0.9; }
+        .btn-icon { background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.25rem; padding: 0.25rem; border-radius: 0.25rem; }
+        .btn-icon:hover { color: var(--text-primary); background: var(--bg-tertiary); }
         .stats { display: flex; gap: 1rem; font-size: 0.85rem; color: var(--text-secondary); }
         main { flex: 1; display: flex; overflow: hidden; }
-        aside { width: 200px; background: var(--bg-secondary); border-right: 1px solid var(--border); padding: 1rem; overflow-y: auto; }
+        aside { width: 200px; background: var(--bg-secondary); border-right: 1px solid var(--border); padding: 1rem; overflow-y: auto; flex-shrink: 0; }
         .sidebar-section { margin-bottom: 1.5rem; }
         .sidebar-title { font-size: 0.75rem; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 0.5rem; letter-spacing: 0.05em; }
         .sidebar-item { padding: 0.4rem 0.5rem; border-radius: 0.25rem; cursor: pointer; display: flex; justify-content: space-between; }
@@ -39,9 +45,10 @@
         .sidebar-item.active { background: var(--accent); }
         .count { background: var(--bg-tertiary); padding: 0.1rem 0.4rem; border-radius: 0.25rem; font-size: 0.75rem; }
         .content { flex: 1; padding: 1rem; overflow-y: auto; }
-        .file-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 1rem; }
-        .file-card { background: var(--bg-secondary); border-radius: 0.5rem; padding: 1rem; cursor: pointer; transition: transform 0.15s; }
+        .file-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
+        .file-card { background: var(--bg-secondary); border-radius: 0.5rem; padding: 1rem; cursor: pointer; transition: transform 0.15s, border-color 0.15s; border: 2px solid transparent; }
         .file-card:hover { transform: translateY(-2px); }
+        .file-card.selected { border-color: var(--accent); }
         .file-icon { font-size: 2rem; margin-bottom: 0.5rem; }
         .file-name { font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .file-meta { font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem; }
@@ -53,13 +60,52 @@
         @keyframes spin { to { transform: rotate(360deg); } }
         .upload-zone { border: 2px dashed var(--border); border-radius: 0.5rem; padding: 2rem; text-align: center; margin-bottom: 1rem; transition: all 0.2s; }
         .upload-zone.dragover { border-color: var(--accent); background: rgba(99, 102, 241, 0.1); }
-        .upload-zone input { display: none; }
         .upload-icon { font-size: 2rem; margin-bottom: 0.5rem; }
-        .toast { position: fixed; bottom: 1rem; right: 1rem; padding: 0.75rem 1rem; border-radius: 0.5rem; color: white; font-size: 0.85rem; opacity: 0; transition: opacity 0.3s; }
+        .toast { position: fixed; bottom: 1rem; right: 1rem; padding: 0.75rem 1rem; border-radius: 0.5rem; color: white; font-size: 0.85rem; opacity: 0; transition: opacity 0.3s; z-index: 200; }
         .toast.show { opacity: 1; }
         .toast.success { background: var(--success); }
         .toast.error { background: var(--danger); }
+        .toast.warning { background: var(--warning); color: #000; }
         #file-input { display: none; }
+
+        .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; display: flex; align-items: center; justify-content: center; }
+        .overlay.hidden { display: none; }
+        .modal { background: var(--bg-secondary); border-radius: 0.75rem; padding: 1.5rem; max-width: 500px; width: 90%; max-height: 80vh; overflow-y: auto; border: 1px solid var(--border); }
+        .modal h2 { margin-bottom: 1rem; font-size: 1.1rem; }
+        .modal label { display: block; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.25rem; margin-top: 0.75rem; }
+        .modal input[type="text"],
+        .modal input[type="number"] { width: 100%; padding: 0.5rem; border-radius: 0.5rem; border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-primary); font-size: 0.85rem; }
+        .modal input:focus { outline: none; border-color: var(--accent); }
+        .modal .btn-row { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem; }
+        .modal .toggle-row { display: flex; align-items: center; justify-content: space-between; margin-top: 0.75rem; }
+        .toggle { width: 40px; height: 22px; background: var(--bg-tertiary); border-radius: 11px; cursor: pointer; position: relative; transition: background 0.2s; }
+        .toggle.active { background: var(--accent); }
+        .toggle::after { content: ''; width: 18px; height: 18px; background: white; border-radius: 50%; position: absolute; top: 2px; left: 2px; transition: left 0.2s; }
+        .toggle.active::after { left: 20px; }
+
+        .detail-panel { position: fixed; top: 0; right: 0; width: 360px; height: 100vh; background: var(--bg-secondary); border-left: 1px solid var(--border); z-index: 90; overflow-y: auto; transform: translateX(100%); transition: transform 0.3s; display: flex; flex-direction: column; }
+        .detail-panel.open { transform: translateX(0); }
+        .detail-header { padding: 1rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 0.75rem; }
+        .detail-header .file-icon-large { font-size: 2.5rem; }
+        .detail-header .detail-name { font-size: 1rem; font-weight: 600; word-break: break-word; }
+        .detail-body { padding: 1rem; flex: 1; overflow-y: auto; }
+        .detail-section { margin-bottom: 1.25rem; }
+        .detail-section h3 { font-size: 0.75rem; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 0.5rem; }
+        .detail-row { display: flex; justify-content: space-between; font-size: 0.85rem; padding: 0.3rem 0; }
+        .detail-row .label { color: var(--text-secondary); }
+        .hash-mono { font-family: monospace; font-size: 0.75rem; color: var(--text-secondary); word-break: break-all; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .tag-pill { display: inline-flex; align-items: center; gap: 0.25rem; background: var(--accent); padding: 0.15rem 0.4rem; border-radius: 0.25rem; font-size: 0.8rem; margin: 0.15rem; }
+        .tag-pill .tag-remove { cursor: pointer; font-size: 0.7rem; opacity: 0.7; }
+        .tag-pill .tag-remove:hover { opacity: 1; }
+        .tag-input-row { display: flex; gap: 0.25rem; margin-top: 0.5rem; }
+        .tag-input-row input { flex: 1; padding: 0.35rem 0.5rem; border-radius: 0.25rem; border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-primary); font-size: 0.8rem; }
+        .tag-input-row input:focus { outline: none; border-color: var(--accent); }
+        .tag-input-row button { padding: 0.35rem 0.5rem; font-size: 0.8rem; }
+        .detail-actions { padding: 1rem; border-top: 1px solid var(--border); display: flex; gap: 0.5rem; }
+
+        .duplicate-modal-actions { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem; flex-wrap: wrap; }
+        .rename-input { width: 100%; margin-top: 0.75rem; padding: 0.5rem; border-radius: 0.5rem; border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-primary); font-size: 0.85rem; }
+        .rename-input:focus { outline: none; border-color: var(--accent); }
     </style>
 </head>
 <body>
@@ -68,9 +114,10 @@
         <div class="search"><input type="text" id="search" placeholder="Search files..."></div>
         <div class="header-actions">
             <div class="stats" id="stats"></div>
-            <button class="btn btn-primary" onclick="document.getElementById('file-input').click()">+ Upload</button>
+            <button class="btn btn-primary" onclick="triggerFileSelect()">+ Upload</button>
+            <button class="btn-icon" onclick="openSettings()" title="Settings">⚙</button>
         </div>
-        <input type="file" id="file-input" multiple onchange="handleUpload(this.files)">
+        <input type="file" id="file-input" multiple>
     </header>
     <main>
         <aside>
@@ -84,26 +131,145 @@
             </div>
         </aside>
         <div class="content">
-            <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()">
+            <div class="upload-zone" id="upload-zone" onclick="triggerFileSelect()">
                 <div class="upload-icon">📤</div>
                 <div>Drop files here or click to upload</div>
             </div>
             <div class="file-grid" id="files-grid"><div class="loading"><div class="spinner"></div></div></div>
         </div>
     </main>
+
+    <!-- Toast -->
     <div class="toast" id="toast"></div>
+
+    <!-- Upload Tags Modal -->
+    <div class="overlay hidden" id="upload-tags-overlay">
+        <div class="modal">
+            <h2>Tags for Upload</h2>
+            <p style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:0.5rem;" id="upload-tags-count"></p>
+            <label>Tags for this batch (comma-separated, no #)</label>
+            <input type="text" id="upload-tags-input" placeholder="e.g. photos, vacation, 2024">
+            <div class="btn-row">
+                <button class="btn btn-secondary" onclick="cancelUpload()">Cancel</button>
+                <button class="btn btn-primary" onclick="confirmUpload()">Upload</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Duplicate Modal -->
+    <div class="overlay hidden" id="duplicate-overlay">
+        <div class="modal" style="max-width:420px;">
+            <p id="duplicate-message" style="font-size:0.95rem;"></p>
+            <div id="duplicate-rename" style="display:none;">
+                <input type="text" class="rename-input" id="duplicate-rename-input">
+            </div>
+            <div class="duplicate-modal-actions">
+                <button class="btn btn-secondary" onclick="dupSkip()">Skip</button>
+                <button class="btn btn-secondary" onclick="dupRename()">Rename</button>
+                <button class="btn btn-primary" onclick="dupReplace()">Replace</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div class="overlay hidden" id="settings-overlay">
+        <div class="modal" style="max-width:520px;">
+            <h2>Settings</h2>
+            <div class="detail-section">
+                <h3>Display</h3>
+                <label>Grid columns</label>
+                <input type="number" id="settings-columns" min="1" max="12" value="4">
+                <div class="toggle-row">
+                    <span>Show file hashes</span>
+                    <div class="toggle" id="settings-show-hash" onclick="toggleSetting(this)"></div>
+                </div>
+            </div>
+            <div class="detail-section">
+                <h3>Upload</h3>
+                <label>Default tags</label>
+                <input type="text" id="settings-default-tags" placeholder="e.g. photos, work">
+                <label>Max upload size warning (MB)</label>
+                <input type="number" id="settings-max-size" min="1" value="100">
+            </div>
+            <div class="detail-section">
+                <h3>About</h3>
+                <div id="settings-stats" style="font-size:0.85rem;color:var(--text-secondary);">
+                    Loading...
+                </div>
+            </div>
+            <div class="btn-row">
+                <button class="btn btn-secondary" onclick="closeSettings()">Cancel</button>
+                <button class="btn btn-primary" onclick="saveSettings()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- File Detail Panel -->
+    <div class="detail-panel" id="detail-panel">
+        <div class="detail-header">
+            <div class="file-icon-large" id="panel-icon"></div>
+            <div class="detail-name" id="panel-name"></div>
+        </div>
+        <div class="detail-body">
+            <div class="detail-section">
+                <h3>Metadata</h3>
+                <div class="detail-row"><span class="label">Size</span><span id="panel-size"></span></div>
+                <div class="detail-row"><span class="label">Uploaded</span><span id="panel-date"></span></div>
+                <div class="detail-row"><span class="label">Hash</span><span class="hash-mono" id="panel-hash" title=""></span></div>
+            </div>
+            <div class="detail-section">
+                <h3>Tags</h3>
+                <div id="panel-tags"></div>
+                <div class="tag-input-row">
+                    <input type="text" id="panel-tag-input" placeholder="Add tag (Enter)" onkeydown="if(event.key==='Enter')panelAddTags()">
+                    <button class="btn btn-primary btn-sm" onclick="panelAddTags()">Add</button>
+                </div>
+            </div>
+        </div>
+        <div class="detail-actions">
+            <button class="btn btn-primary" onclick="panelDownload()">Download</button>
+            <button class="btn btn-danger" onclick="panelDelete()">Delete</button>
+        </div>
+    </div>
+
     <script>
-        const state = { files: [], tags: [], searchQuery: '' };
+        const state = { files: [], tags: [], searchQuery: '', selectedFile: null };
         const fileIcons = { image: '🖼️', video: '🎬', audio: '🎵', document: '📄', code: '💻', archive: '📦', web: '🌐' };
+        const settings = loadSettings();
+        let pendingFiles = [];
+        let dupResolve = null;
+
+        function loadSettings() {
+            try {
+                const s = JSON.parse(localStorage.getItem('akcloud_settings') || '{}');
+                return {
+                    columns: s.columns || 4,
+                    showHash: s.showHash === true,
+                    defaultTags: s.defaultTags || '',
+                    maxSizeMB: s.maxSizeMB || 100,
+                };
+            } catch (e) { return { columns: 4, showHash: false, defaultTags: '', maxSizeMB: 100 }; }
+        }
+
+        function saveSettingsToStorage(s) {
+            localStorage.setItem('akcloud_settings', JSON.stringify(s));
+        }
+
+        function applySettings() {
+            document.getElementById('files-grid').style.gridTemplateColumns = `repeat(${settings.columns}, 1fr)`;
+        }
+
         function getIcon(type) { return fileIcons[type] || '📄'; }
         function formatSize(bytes) { if (bytes < 1024) return bytes + ' B'; if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB'; if (bytes < 1024*1024*1024) return (bytes/(1024*1024)).toFixed(1) + ' MB'; return (bytes/(1024*1024*1024)).toFixed(1) + ' GB'; }
-        function formatDate(dateStr) { return new Date(dateStr).toLocaleDateString(); }
+        function formatDate(dateStr) { return new Date(dateStr + 'Z').toLocaleDateString(); }
+
         function showToast(message, type = 'success') {
             const toast = document.getElementById('toast');
             toast.textContent = message;
             toast.className = 'toast ' + type + ' show';
             setTimeout(() => toast.classList.remove('show'), 3000);
         }
+
         async function loadFiles() {
             const grid = document.getElementById('files-grid');
             grid.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
@@ -115,40 +281,362 @@
                 renderFiles();
             } catch (e) { grid.innerHTML = '<div class="empty">Error: ' + e + '</div>'; }
         }
+
         async function loadTags() {
             try { const res = await fetch('/api/tags'); state.tags = await res.json(); renderTags(); } catch (e) { console.error(e); }
         }
+
         async function loadStats() {
             try { const res = await fetch('/api/stats'); const stats = await res.json(); document.getElementById('stats').innerHTML = '<span>' + stats.total_files + ' files</span><span>' + formatSize(stats.total_size) + '</span>'; } catch (e) { console.error(e); }
         }
+
         function renderFiles() {
             const grid = document.getElementById('files-grid');
             if (state.files.length === 0) { grid.innerHTML = '<div class="empty">No files - upload some!</div>'; return; }
-            grid.innerHTML = state.files.map(file => '<div class="file-card"><div class="file-icon">' + getIcon(file.name.split('.').pop()) + '</div><div class="file-name" title="' + file.name + '">' + file.name + '</div><div class="file-meta">' + formatSize(file.size) + ' · ' + formatDate(file.updated_at) + '</div></div>').join('');
+            grid.innerHTML = state.files.map(file => {
+                const isSelected = state.selectedFile && state.selectedFile.id === file.id;
+                const ext = (file.name || '').split('.').pop() || '';
+                return `<div class="file-card${isSelected ? ' selected' : ''}" onclick="openFilePanel(${file.id})" data-id="${file.id}">
+                    <div class="file-icon">${getIcon(ext)}</div>
+                    <div class="file-name" title="${file.name}">${file.name}</div>
+                    <div class="file-meta">${formatSize(file.size)} · ${formatDate(file.updated_at || file.created_at)}</div>
+                    <div class="file-tags">${(file.tags || []).map(t => '<span class="tag">' + t + '</span>').join('')}</div>
+                </div>`;
+            }).join('');
         }
+
         function renderTags() { document.getElementById('tags-list').innerHTML = state.tags.map(tag => '<div class="sidebar-item"><span>' + tag.name + '</span><span class="count">' + tag.count + '</span></div>').join(''); }
-        async function handleUpload(files) {
-            if (!files || files.length === 0) return;
-            for (const file of files) {
-                const formData = new FormData();
-                formData.append('file', file);
-                try {
-                    const res = await fetch('/api/files', { method: 'POST', body: formData });
-                    const data = await res.json();
-                    if (data.success) { showToast('Uploaded: ' + data.filename); }
-                    else { showToast(data.error || 'Upload failed', 'error'); }
-                } catch (e) { showToast('Upload failed: ' + e, 'error'); }
-            }
-            loadFiles();
-            loadStats();
+
+        // --- File Detail Panel ---
+
+        async function openFilePanel(fileId) {
+            const file = state.files.find(f => f.id === fileId);
+            if (!file) return;
+            state.selectedFile = file;
+            renderFiles();
+            const panel = document.getElementById('detail-panel');
+            const ext = (file.name || '').split('.').pop() || '';
+            document.getElementById('panel-icon').textContent = getIcon(ext);
+            document.getElementById('panel-name').textContent = file.name;
+            document.getElementById('panel-size').textContent = formatSize(file.size);
+            document.getElementById('panel-date').textContent = formatDate(file.updated_at || file.created_at);
+            const hash = file.hash || '';
+            const hashEl = document.getElementById('panel-hash');
+            hashEl.textContent = hash.substring(0, 12) + '...';
+            hashEl.title = hash;
+            document.getElementById('panel-tag-input').value = '';
+            panel.classList.add('open');
+            await loadPanelTags(fileId);
         }
+
+        function closeFilePanel() {
+            document.getElementById('detail-panel').classList.remove('open');
+            state.selectedFile = null;
+            renderFiles();
+        }
+
+        async function loadPanelTags(fileId) {
+            try {
+                const res = await fetch(`/api/file/${fileId}/tags`);
+                const tags = await res.json();
+                const container = document.getElementById('panel-tags');
+                if (!tags || tags.length === 0) {
+                    container.innerHTML = '<span style="font-size:0.8rem;color:var(--text-secondary);">No tags</span>';
+                } else {
+                    container.innerHTML = tags.map(t => 
+                        `<span class="tag-pill">${t.name}<span class="tag-remove" onclick="panelRemoveTag(${fileId},'${t.name}')">✕</span></span>`
+                    ).join('');
+                }
+            } catch (e) {
+                document.getElementById('panel-tags').innerHTML = '<span style="font-size:0.8rem;color:var(--text-secondary);">Error loading tags</span>';
+            }
+        }
+
+        async function panelAddTags() {
+            if (!state.selectedFile) return;
+            const input = document.getElementById('panel-tag-input');
+            const raw = input.value.trim();
+            if (!raw) return;
+            const tags = raw.split(',').map(t => t.trim()).filter(Boolean);
+            const fileId = state.selectedFile.id;
+            for (const tag of tags) {
+                try {
+                    await fetch(`/api/file-tags/${encodeURIComponent(state.selectedFile.name)}/${encodeURIComponent(tag)}`, { method: 'PUT' });
+                } catch (e) { console.error(e); }
+            }
+            input.value = '';
+            await loadPanelTags(fileId);
+            state.selectedFile = state.files.find(f => f.id === fileId) || state.selectedFile;
+        }
+
+        async function panelRemoveTag(fileId, tagName) {
+            try {
+                await fetch(`/api/file-tags/${encodeURIComponent(state.selectedFile.name)}/${encodeURIComponent(tagName)}`, { method: 'DELETE' });
+            } catch (e) { console.error(e); }
+            await loadPanelTags(fileId);
+        }
+
+        function panelDownload() {
+            if (!state.selectedFile) return;
+            const link = document.createElement('a');
+            link.href = `/api/file/${encodeURIComponent(state.selectedFile.name)}/download`;
+            link.download = state.selectedFile.name;
+            link.click();
+        }
+
+        async function panelDelete() {
+            if (!state.selectedFile) return;
+            if (!confirm('Delete "' + state.selectedFile.name + '"?')) return;
+            try {
+                await fetch(`/api/file/${encodeURIComponent(state.selectedFile.name)}`, { method: 'DELETE' });
+                showToast('Deleted: ' + state.selectedFile.name);
+                closeFilePanel();
+                await loadFiles();
+                await loadStats();
+            } catch (e) { showToast('Delete failed: ' + e, 'error'); }
+        }
+
+        // Close panel on click outside or Escape
+        document.addEventListener('click', function(e) {
+            const panel = document.getElementById('detail-panel');
+            if (panel.classList.contains('open') && !panel.contains(e.target) && !e.target.closest('.file-card')) {
+                closeFilePanel();
+            }
+        });
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && document.getElementById('detail-panel').classList.contains('open')) {
+                closeFilePanel();
+            }
+        });
+
+        // --- Upload Flow ---
+
+        function triggerFileSelect() {
+            const input = document.getElementById('file-input');
+            input.value = '';
+            input.click();
+        }
+
+        document.getElementById('file-input').addEventListener('change', function() {
+            if (this.files.length > 0) {
+                interceptUpload(Array.from(this.files));
+            }
+        });
+
         const zone = document.getElementById('upload-zone');
         zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
         zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
-        zone.addEventListener('drop', e => { e.preventDefault(); zone.classList.remove('dragover'); handleUpload(e.dataTransfer.files); });
-        document.getElementById('search').addEventListener('input', e => { state.searchQuery = e.target.value; clearTimeout(state.searchTimeout); state.searchTimeout = setTimeout(loadFiles, 300); });
+        zone.addEventListener('drop', e => {
+            e.preventDefault();
+            zone.classList.remove('dragover');
+            if (e.dataTransfer.files.length > 0) {
+                interceptUpload(Array.from(e.dataTransfer.files));
+            }
+        });
+
+        function interceptUpload(files) {
+            const maxSizeMB = settings.maxSizeMB;
+            const maxBytes = maxSizeMB * 1024 * 1024;
+            for (const file of files) {
+                if (file.size > maxBytes) {
+                    showToast(`Warning: ${file.name} exceeds ${maxSizeMB}MB limit`, 'warning');
+                }
+            }
+            pendingFiles = files;
+            const overlay = document.getElementById('upload-tags-overlay');
+            overlay.querySelector('#upload-tags-input').value = settings.defaultTags || '';
+            document.getElementById('upload-tags-count').textContent = `${files.length} file(s) selected`;
+            overlay.classList.remove('hidden');
+        }
+
+        function cancelUpload() {
+            pendingFiles = [];
+            document.getElementById('upload-tags-overlay').classList.add('hidden');
+        }
+
+        async function confirmUpload() {
+            const raw = document.getElementById('upload-tags-input').value.trim();
+            const tags = raw ? raw.split(',').map(t => t.trim()).filter(Boolean) : [];
+            document.getElementById('upload-tags-overlay').classList.add('hidden');
+            const files = pendingFiles;
+            pendingFiles = [];
+
+            for (const file of files) {
+                const dupCheck = await checkDuplicate(file.name);
+                if (dupCheck) {
+                    const action = await showDuplicateModal(file.name);
+                    let fileToUpload = file;
+                    if (action === 'skip') continue;
+                    if (action === 'rename') {
+                        const newName = await showRenameModal(file.name);
+                        if (!newName) continue;
+                        fileToUpload = new File([file], newName, { type: file.type });
+                    }
+                }
+
+                const formData = new FormData();
+                formData.append('file', fileToUpload);
+                try {
+                    const res = await fetch('/api/files', { method: 'POST', body: formData });
+                    const data = await res.json();
+                    if (data.success) {
+                        showToast('Uploaded: ' + data.filename);
+                        for (const tag of tags) {
+                            await fetch(`/api/file-tags/${encodeURIComponent(data.filename)}/${encodeURIComponent(tag)}`, { method: 'PUT' }).catch(e => console.error(e));
+                        }
+                    } else {
+                        showToast(data.error || 'Upload failed', 'error');
+                    }
+                } catch (e) { showToast('Upload failed: ' + e, 'error'); }
+            }
+            await loadFiles();
+            await loadStats();
+        }
+
+        async function checkDuplicate(filename) {
+            try {
+                const res = await fetch(`/api/files/search?q=${encodeURIComponent(filename)}&limit=5`);
+                const data = await res.json();
+                const files = data.files || [];
+                return files.some(f => f.name === filename);
+            } catch (e) { return false; }
+        }
+
+        function showDuplicateModal(filename) {
+            return new Promise(resolve => {
+                dupResolve = resolve;
+                document.getElementById('duplicate-message').textContent = `"${filename}" already exists`;
+                document.getElementById('duplicate-rename').style.display = 'none';
+                document.getElementById('duplicate-overlay').classList.remove('hidden');
+            });
+        }
+
+        function dupReplace() {
+            document.getElementById('duplicate-overlay').classList.add('hidden');
+            dupResolve && dupResolve('replace');
+            dupResolve = null;
+        }
+
+        function dupSkip() {
+            document.getElementById('duplicate-overlay').classList.add('hidden');
+            dupResolve && dupResolve('skip');
+            dupResolve = null;
+        }
+
+        async function dupRename() {
+            if (document.getElementById('duplicate-rename').style.display === 'none') {
+                const filename = document.getElementById('duplicate-message').textContent.replace(/"/g, '').replace(' already exists', '');
+                const dotIdx = filename.lastIndexOf('.');
+                let newName;
+                if (dotIdx > 0) {
+                    newName = `copy_of_${filename.substring(0, dotIdx)}${filename.substring(dotIdx)}`;
+                } else {
+                    newName = `copy_of_${filename}`;
+                }
+                document.getElementById('duplicate-rename-input').value = newName;
+                document.getElementById('duplicate-rename').style.display = 'block';
+                document.getElementById('duplicate-rename-input').focus();
+                document.getElementById('duplicate-rename-input').onkeydown = function(e) {
+                    if (e.key === 'Enter') dupRenameConfirm();
+                };
+            } else {
+                dupRenameConfirm();
+            }
+        }
+
+        function dupRenameConfirm() {
+            const newName = document.getElementById('duplicate-rename-input').value.trim();
+            if (!newName) return;
+            document.getElementById('duplicate-overlay').classList.add('hidden');
+            document.getElementById('duplicate-rename').style.display = 'none';
+            dupResolve && dupResolve(newName);
+            dupResolve = null;
+        }
+
+        async function showRenameModal(filename) {
+            return new Promise(resolve => {
+                dupResolve = resolve;
+                document.getElementById('duplicate-message').textContent = 'Rename "' + filename + '"';
+                const dotIdx = filename.lastIndexOf('.');
+                let newName;
+                if (dotIdx > 0) {
+                    newName = `copy_of_${filename.substring(0, dotIdx)}${filename.substring(dotIdx)}`;
+                } else {
+                    newName = `copy_of_${filename}`;
+                }
+                document.getElementById('duplicate-rename-input').value = newName;
+                document.getElementById('duplicate-rename').style.display = 'block';
+                document.getElementById('duplicate-rename-input').focus();
+                document.getElementById('duplicate-rename-input').select();
+                document.getElementById('duplicate-rename-input').onkeydown = function(e) {
+                    if (e.key === 'Enter') {
+                        const val = document.getElementById('duplicate-rename-input').value.trim();
+                        document.getElementById('duplicate-overlay').classList.add('hidden');
+                        document.getElementById('duplicate-rename').style.display = 'none';
+                        resolve(val || null);
+                    }
+                };
+                document.getElementById('duplicate-overlay').classList.remove('hidden');
+                dupReplace = () => resolve(null);
+            });
+        }
+
+        // Override dupReplace temporarily in rename mode - use the existing dup* functions
+        // dupReplace and dupSkip are overridden in the rename modal context
+
+        // --- Settings ---
+
+        function openSettings() {
+            const ov = document.getElementById('settings-overlay');
+            document.getElementById('settings-columns').value = settings.columns;
+            const toggleEl = document.getElementById('settings-show-hash');
+            if (settings.showHash) toggleEl.classList.add('active'); else toggleEl.classList.remove('active');
+            document.getElementById('settings-default-tags').value = settings.defaultTags;
+            document.getElementById('settings-max-size').value = settings.maxSizeMB;
+            fetch('/api/stats').then(r => r.json()).then(stats => {
+                document.getElementById('settings-stats').innerHTML = 
+                    `<div class="detail-row"><span class="label">Total files</span><span>${stats.total_files}</span></div>` +
+                    `<div class="detail-row"><span class="label">Total size</span><span>${formatSize(stats.total_size)}</span></div>` +
+                    `<div class="detail-row"><span class="label">Total tags</span><span>${stats.total_tags}</span></div>`;
+            }).catch(() => {});
+            ov.classList.remove('hidden');
+        }
+
+        function closeSettings() {
+            document.getElementById('settings-overlay').classList.add('hidden');
+        }
+
+        function toggleSetting(el) {
+            el.classList.toggle('active');
+        }
+
+        function saveSettings() {
+            settings.columns = parseInt(document.getElementById('settings-columns').value) || 4;
+            settings.showHash = document.getElementById('settings-show-hash').classList.contains('active');
+            settings.defaultTags = document.getElementById('settings-default-tags').value;
+            settings.maxSizeMB = parseInt(document.getElementById('settings-max-size').value) || 100;
+            saveSettingsToStorage(settings);
+            applySettings();
+            closeSettings();
+            showToast('Settings saved');
+        }
+
+        // --- Search ---
+
+        document.getElementById('search').addEventListener('input', e => {
+            state.searchQuery = e.target.value;
+            clearTimeout(state.searchTimeout);
+            state.searchTimeout = setTimeout(loadFiles, 300);
+        });
         state.searchTimeout = null;
-        loadFiles(); loadTags(); loadStats();
+
+        // --- Init ---
+
+        applySettings();
+        loadFiles();
+        loadTags();
+        loadStats();
     </script>
 </body>
 </html>
