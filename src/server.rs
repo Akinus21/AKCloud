@@ -28,6 +28,7 @@ let app = Router::new()
         .route("/api/files", get(list_files))
         .route("/api/files", post(upload_file))
         .route("/api/files/search", get(search_files))
+        .route("/api/files/tag/:tag", get(list_files_by_tag))
 
         .route("/api/file/:id", get(get_file))
         .route("/api/file/:id/tags", get(get_file_tags))
@@ -107,6 +108,26 @@ async fn search_files(
         Ok(result) => Json(result).into_response(),
         Err(e) => {
             tracing::error!("Error searching files: {}", e);
+            Json(json!({ "error": e.to_string() })).into_response()
+        }
+    }
+}
+
+async fn list_files_by_tag(
+    State(state): State<Arc<AppState>>,
+    Path(tag): Path<String>,
+    Query(query): Query<ListFilesQuery>,
+) -> impl IntoResponse {
+    let limit = query.limit.unwrap_or(50);
+    let offset = query.offset.unwrap_or(0);
+
+    match state.db.list_files_by_tag(&tag, limit, offset).await {
+        Ok(files) => Json(json!({
+            "files": files,
+            "total": files.len() as i64,
+        })).into_response(),
+        Err(e) => {
+            tracing::error!("Error listing files by tag: {}", e);
             Json(json!({ "error": e.to_string() })).into_response()
         }
     }

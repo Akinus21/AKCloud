@@ -16,6 +16,8 @@ pub struct FileRecord {
     pub mtime: i64,
     pub created_at: String,
     pub updated_at: String,
+    #[serde(default)]
+    pub tags: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -245,9 +247,8 @@ impl Database {
                     mtime: row.get(5)?,
                     created_at: row.get(6)?,
                     updated_at: row.get(7)?,
+                    tags: Vec::new(),
                 })
-            },
-        ).optional()?;
 
         Ok(record)
     }
@@ -269,6 +270,7 @@ impl Database {
                 mtime: row.get(5)?,
                 created_at: row.get(6)?,
                 updated_at: row.get(7)?,
+                tags: Vec::new(),
             })
         })?.collect::<Result<Vec<_>, _>>()?;
 
@@ -293,6 +295,37 @@ impl Database {
                 mtime: row.get(5)?,
                 created_at: row.get(6)?,
                 updated_at: row.get(7)?,
+                tags: Vec::new(),
+            })
+        })?.collect::<Result<Vec<_>, _>>()?;
+
+        Ok(records)
+    }
+
+    pub async fn list_files_by_tag(&self, tag_name: &str, limit: i64, offset: i64) -> Result<Vec<FileRecord>> {
+        let conn = self.conn.lock();
+
+        let mut stmt = conn.prepare(
+            r#"SELECT f.id, f.path, f.name, f.size, f.hash, f.mtime, f.created_at, f.updated_at
+               FROM files f
+               JOIN file_tags ft ON f.id = ft.file_id
+               JOIN tags t ON ft.tag_id = t.id
+               WHERE t.name = ?1
+               ORDER BY f.updated_at DESC
+               LIMIT ?2 OFFSET ?3"#
+        )?;
+
+        let records = stmt.query_map(params![tag_name, limit, offset], |row| {
+            Ok(FileRecord {
+                id: row.get(0)?,
+                path: row.get(1)?,
+                name: row.get(2)?,
+                size: row.get(3)?,
+                hash: row.get(4)?,
+                mtime: row.get(5)?,
+                created_at: row.get(6)?,
+                updated_at: row.get(7)?,
+                tags: Vec::new(),
             })
         })?.collect::<Result<Vec<_>, _>>()?;
 
@@ -329,6 +362,7 @@ impl Database {
                 mtime: row.get(5)?,
                 created_at: row.get(6)?,
                 updated_at: row.get(7)?,
+                tags: Vec::new(),
             })
         })?.collect::<Result<Vec<_>, _>>()?;
 
