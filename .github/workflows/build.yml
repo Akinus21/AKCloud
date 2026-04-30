@@ -48,18 +48,19 @@ jobs:
         run: |
           git fetch --tags
           latest=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-          if [ -z "$latest" ] || [[ "$latest" == *.*.* ]] && [[ ! "$latest" =~ ^v[0-9] ]]; then
+          if [ -z "$latest" ] || ! [[ "$latest" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             latest="v0.0.0"
           fi
-          if [[ "$latest" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            major=$(echo $latest | cut -d. -f1 | tr -d 'v')
-            minor=$(echo $latest | cut -d. -f2)
-            patch=$(echo $latest | cut -d. -f3)
-            new_minor=$((minor + 1))
-            new_tag="v${major}.${new_minor}.0"
-          else
-            new_tag="v1.0.0"
-          fi
+          major=$(echo $latest | cut -d. -f1 | tr -d 'v')
+          minor=$(echo $latest | cut -d. -f2)
+          patch=$(echo $latest | cut -d. -f3)
+          while true; do
+            new_tag="v${major}.${minor}.${patch}"
+            if ! git rev-parse "$new_tag" >/dev/null 2>&1; then
+              break
+            fi
+            patch=$((patch + 1))
+          done
           echo "new_tag=$new_tag" >> $GITHUB_OUTPUT
           git tag $new_tag
           git push origin $new_tag
