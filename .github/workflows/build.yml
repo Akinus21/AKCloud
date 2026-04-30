@@ -64,7 +64,7 @@ jobs:
           echo "new_tag=$new_tag" >> $GITHUB_OUTPUT
           git tag $new_tag
           git push origin $new_tag
-          gh release create $new_tag --title "$new_tag" --notes "Release build" ./target/release/aktags-cloud
+          gh release create $new_tag --title "$new_tag" --notes "Release build" -R Akinus21/AKCloud ./target/release/aktags-cloud
 
       - name: Webhook notification on success
         if: success()
