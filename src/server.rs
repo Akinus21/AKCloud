@@ -28,6 +28,7 @@ pub async fn create_router(db: Database, config: Config) -> Result<Router> {
         .route("/api/files", post(upload_file))
         .route("/api/files/search", get(search_files))
         .route("/api/files/tag/:tag", get(list_files_by_tag))
+        .route("/api/files/by-tags", get(list_files_by_tags))
         .route("/api/file/:id", get(get_file))
         .route("/api/file/:id/tags", get(get_file_tags))
         .route("/api/file/:id/download", get(download_file))
@@ -106,6 +107,38 @@ async fn search_files(
     }
 }
 
+#[derive(Debug, Deserialize)]
+pub struct TagFilterQuery {
+    tags: String,
+    limit: Option<i64>,
+    offset: Option<i64>,
+}
+
+async fn list_files_by_tags(
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<TagFilterQuery>,
+) -> impl IntoResponse {
+    let limit = query.limit.unwrap_or(100);
+    let offset = query.offset.unwrap_or(0);
+    let tag_names: Vec<String> = query.tags
+        .split(',')
+        .map(|t| t.trim().to_lowercase())
+        .filter(|t| !t.is_empty())
+        .collect();
+
+    if tag_names.is_empty() {
+        return Json(json!({ "files": [], "total": 0 })).into_response();
+    }
+
+    match state.db.list_files_by_tags(&tag_names, limit, offset).await {
+        Ok(files) => Json(json!({ "files": files, "total": files.len() as i64 })).into_response(),
+        Err(e) => {
+            tracing::error!("Error listing files by tags: {}", e);
+            Json(json!({ "error": e.to_string() })).into_response()
+        }
+    }
+}
+
 async fn list_files_by_tag(
     State(state): State<Arc<AppState>>,
     Path(tag): Path<String>,
@@ -114,7 +147,7 @@ async fn list_files_by_tag(
     let limit = query.limit.unwrap_or(50);
     let offset = query.offset.unwrap_or(0);
 
-    match state.db.list_files_by_tag(&tag, limit, offset).await {
+    match state.db.list_files_by_tags(&[tag], limit, offset).await {
         Ok(files) => Json(json!({
             "files": files,
             "total": files.len() as i64,

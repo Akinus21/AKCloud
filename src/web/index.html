@@ -278,21 +278,13 @@
                 if (state.searchQuery) {
                     url = `/api/files/search?q=${encodeURIComponent(state.searchQuery)}&limit=100`;
                 } else if (state.activeTagFilters.length > 0) {
-                    url = `/api/files/tag/${encodeURIComponent(state.activeTagFilters[0])}?limit=100`;
+                    url = `/api/files/by-tags?tags=${encodeURIComponent(state.activeTagFilters.join(','))}&limit=100`;
                 } else {
                     url = '/api/files?limit=100';
                 }
                 const res = await fetch(url);
                 const data = await res.json();
-                let files = data.files || data || [];
-                // Client-side filter: file must have ALL active tags
-                if (state.activeTagFilters.length > 0 && files.length > 0) {
-                    files = files.filter(f => {
-                        const fileTags = (f.tags || []).map(t => t.toLowerCase());
-                        return state.activeTagFilters.every(filter => fileTags.includes(filter.toLowerCase()));
-                    });
-                }
-                state.files = files;
+                state.files = data.files || [];
                 renderFiles();
             } catch (e) { grid.innerHTML = '<div class="empty">Error: ' + e + '</div>'; }
         }

@@ -318,27 +318,46 @@ impl Database {
         Ok(records)
     }
 
-    pub async fn list_files_by_tag(
+    pub async fn list_files_by_tags(
         &self,
-        tag_name: &str,
+        tag_names: &[String],
         limit: i64,
         offset: i64,
     ) -> Result<Vec<FileRecord>> {
-        let tag_name = tag_name.to_lowercase();
         let conn = self.conn.lock();
 
-        let mut stmt = conn.prepare(
-            r#"SELECT f.id, f.path, f.name, f.size, f.hash, f.mtime, f.created_at, f.updated_at
+        let placeholders = tag_names
+            .iter()
+            .map(|_| "?")
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let n = tag_names.len() as i64;
+        let sql = format!(
+            "SELECT f.id, f.path, f.name, f.size, f.hash, f.mtime, f.created_at, f.updated_at
                FROM files f
                JOIN file_tags ft ON f.id = ft.file_id
                JOIN tags t ON ft.tag_id = t.id
-               WHERE LOWER(t.name) = ?1
+               WHERE LOWER(t.name) IN ({0})
+               GROUP BY f.id
+               HAVING COUNT(DISTINCT LOWER(t.name)) = {1}
                ORDER BY f.updated_at DESC
-               LIMIT ?2 OFFSET ?3"#,
-        )?;
+               LIMIT {2} OFFSET {3}",
+            placeholders, n, limit, offset
+        );
 
-        let records = stmt
-            .query_map(params![&tag_name, limit, offset], |row| {
+        let lowered: Vec<String> = tag_names.iter().map(|t| t.to_lowercase()).collect();
+        let mut params_vec: Vec<&dyn rusqlite::ToSql> = lowered
+            .iter()
+            .map(|t| t as &dyn rusqlite::ToSql)
+            .collect();
+        params_vec.push(&n);
+        params_vec.push(&limit);
+        params_vec.push(&offset);
+
+        let mut stmt = conn.prepare(&sql)?;
+        let mut records: Vec<FileRecord> = stmt
+            .query_map(params_vec.as_slice(), |row| {
                 Ok(FileRecord {
                     id: row.get(0)?,
                     path: row.get(1)?,
@@ -352,6 +371,19 @@ impl Database {
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
+
+        // Populate tags for each record
+        let mut tag_stmt = conn.prepare(
+            r#"SELECT t.name FROM tags t
+               JOIN file_tags ft ON t.id = ft.tag_id
+               WHERE ft.file_id = ?1
+               ORDER BY t.name"#,
+        )?;
+        for record in &mut records {
+            record.tags = tag_stmt
+                .query_map(params![record.id], |row| row.get(0))?
+                .collect::<Result<Vec<String>, _>>()?;
+        }
 
         Ok(records)
     }
