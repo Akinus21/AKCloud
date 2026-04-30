@@ -37,8 +37,8 @@ pub async fn create_router(db: Database, config: Config) -> Result<Router> {
         .route("/api/tags", post(create_tag))
         .route("/api/tags/:name", delete(remove_tag))
         
-        .route("/api/files/:path/tags/:tag", put(tag_file))
-        .route("/api/files/:path/tags/:tag", delete(untag_file))
+        .route("/api/file-tags/:path/:tag", put(tag_file))
+        .route("/api/file-tags/:path/:tag", delete(untag_file))
         
         .route("/api/stats", get(get_stats))
         
