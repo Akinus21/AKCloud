@@ -134,9 +134,9 @@ async fn delete_file(
 
 async fn get_file_tags(
     State(state): State<Arc<AppState>>,
-    Path(path): Path<String>,
+    Path(id): Path<String>,
 ) -> impl IntoResponse {
-    match state.db.get_file_tags(&path).await {
+    match state.db.get_file_tags(&id).await {
         Ok(tags) => Json(tags).into_response(),
         Err(e) => {
             tracing::error!("Error getting file tags: {}", e);
@@ -252,7 +252,15 @@ async fn upload_file(
 ) -> impl IntoResponse {
     let upload_path = state.config.storage.upload_path.clone();
 
-    while let Some(field) = multipart.next_field().await.unwrap() {
+    loop {
+        let field = match multipart.next_field().await {
+            Ok(Some(f)) => f,
+            Ok(None) => break,
+            Err(e) => {
+                tracing::error!("Multipart error: {:?}", e);
+                return Json(json!({ "error": format!("Multipart error: {:?}", e) })).into_response();
+            }
+        };
         let filename = field.file_name().unwrap_or("unknown").to_string();
         let filepath = upload_path.join(&filename);
 
@@ -314,10 +322,10 @@ async fn upload_file(
 
 async fn download_file(
     State(state): State<Arc<AppState>>,
-    Path(path): Path<String>,
+    Path(id): Path<String>,
 ) -> impl IntoResponse {
     let upload_path = state.config.storage.upload_path.clone();
-    let filepath = upload_path.join(&path);
+    let filepath = upload_path.join(&id);
     
     if !filepath.exists() {
         return Json(json!({ "error": "File not found" })).into_response();
