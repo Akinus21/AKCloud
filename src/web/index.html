@@ -58,9 +58,10 @@
         .loading { display: flex; align-items: center; justify-content: center; height: 100%; }
         .spinner { width: 2rem; height: 2rem; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
-        .upload-zone { border: 2px dashed var(--border); border-radius: 0.5rem; padding: 2rem; text-align: center; margin-bottom: 1rem; transition: all 0.2s; }
-        .upload-zone.dragover { border-color: var(--accent); background: rgba(99, 102, 241, 0.1); }
-        .upload-icon { font-size: 2rem; margin-bottom: 0.5rem; }
+        .filter-bar { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 1rem; min-height: 32px; }
+        .filter-chip { display: inline-flex; align-items: center; gap: 0.3rem; background: var(--accent); padding: 0.3rem 0.6rem; border-radius: 0.5rem; font-size: 0.8rem; }
+        .filter-chip .chip-remove { cursor: pointer; font-size: 0.8rem; opacity: 0.7; }
+        .filter-chip .chip-remove:hover { opacity: 1; }
         .toast { position: fixed; bottom: 1rem; right: 1rem; padding: 0.75rem 1rem; border-radius: 0.5rem; color: white; font-size: 0.85rem; opacity: 0; transition: opacity 0.3s; z-index: 200; }
         .toast.show { opacity: 1; }
         .toast.success { background: var(--success); }
@@ -131,10 +132,7 @@
             </div>
         </aside>
         <div class="content">
-            <div class="upload-zone" id="upload-zone" onclick="triggerFileSelect()">
-                <div class="upload-icon">📤</div>
-                <div>Drop files here or click to upload</div>
-            </div>
+            <div class="filter-bar" id="filter-bar"></div>
             <div class="file-grid" id="files-grid"><div class="loading"><div class="spinner"></div></div></div>
         </div>
     </main>
@@ -233,7 +231,7 @@
     </div>
 
     <script>
-        const state = { files: [], tags: [], searchQuery: '', selectedFile: null };
+        const state = { files: [], tags: [], searchQuery: '', selectedFile: null, activeTagFilters: [] };
         const fileIcons = { image: '🖼️', video: '🎬', audio: '🎵', document: '📄', code: '💻', archive: '📦', web: '🌐' };
         const settings = loadSettings();
         let pendingFiles = [];
@@ -274,10 +272,26 @@
             const grid = document.getElementById('files-grid');
             grid.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
             try {
-                let url = state.searchQuery ? `/api/files/search?q=${encodeURIComponent(state.searchQuery)}&limit=100` : '/api/files?limit=100';
+                let url;
+                if (state.searchQuery) {
+                    url = `/api/files/search?q=${encodeURIComponent(state.searchQuery)}&limit=100`;
+                } else if (state.activeTagFilters.length > 0) {
+                    // Search using first active tag; refine client-side for multiple
+                    url = `/api/files/search?q=${encodeURIComponent(state.activeTagFilters[0])}&limit=100`;
+                } else {
+                    url = '/api/files?limit=100';
+                }
                 const res = await fetch(url);
                 const data = await res.json();
-                state.files = data.files || data;
+                let files = data.files || data || [];
+                // Client-side tag filter: file must have ALL active tags
+                if (state.activeTagFilters.length > 0 && files.length > 0) {
+                    files = files.filter(f => {
+                        const fileTags = (f.tags || []).map(t => t.toLowerCase());
+                        return state.activeTagFilters.every(filter => fileTags.includes(filter.toLowerCase()));
+                    });
+                }
+                state.files = files;
                 renderFiles();
             } catch (e) { grid.innerHTML = '<div class="empty">Error: ' + e + '</div>'; }
         }
@@ -305,7 +319,13 @@
             }).join('');
         }
 
-        function renderTags() { document.getElementById('tags-list').innerHTML = state.tags.map(tag => '<div class="sidebar-item"><span>' + tag.name + '</span><span class="count">' + tag.count + '</span></div>').join(''); }
+        function renderTags() {
+            document.getElementById('tags-list').innerHTML = state.tags.map(tag =>
+                `<div class="sidebar-item" onclick="addTagFilter('${tag.name.replace(/'/g, "\\'")}')">
+                    <span>${tag.name}</span><span class="count">${tag.count}</span>
+                </div>`
+            ).join('');
+        }
 
         // --- File Detail Panel ---
 
@@ -366,7 +386,9 @@
             }
             input.value = '';
             await loadPanelTags(fileId);
-            state.selectedFile = state.files.find(f => f.id === fileId) || state.selectedFile;
+            await loadTags();
+            await loadFiles();
+            renderFilterBar();
         }
 
         async function panelRemoveTag(fileId, tagName) {
@@ -374,6 +396,9 @@
                 await fetch(`/api/file-tags/${fileId}/${encodeURIComponent(tagName)}`, { method: 'DELETE' });
             } catch (e) { console.error(e); }
             await loadPanelTags(fileId);
+            await loadTags();
+            await loadFiles();
+            renderFilterBar();
         }
 
         function panelDownload() {
@@ -410,6 +435,28 @@
             }
         });
 
+        function addTagFilter(tagName) {
+            if (!state.activeTagFilters.includes(tagName)) {
+                state.activeTagFilters.push(tagName);
+                renderFilterBar();
+                loadFiles();
+            }
+        }
+
+        function removeTagFilter(tagName) {
+            state.activeTagFilters = state.activeTagFilters.filter(t => t !== tagName);
+            renderFilterBar();
+            loadFiles();
+        }
+
+        function renderFilterBar() {
+            const bar = document.getElementById('filter-bar');
+            if (state.activeTagFilters.length === 0) { bar.innerHTML = ''; return; }
+            bar.innerHTML = state.activeTagFilters.map(t =>
+                `<div class="filter-chip">${t}<span class="chip-remove" onclick="removeTagFilter('${t.replace(/'/g, "\\'")}')">✕</span></div>`
+            ).join('');
+        }
+
         // --- Upload Flow ---
 
         function triggerFileSelect() {
@@ -418,21 +465,17 @@
             input.click();
         }
 
-        document.getElementById('file-input').addEventListener('change', function() {
-            if (this.files.length > 0) {
-                interceptUpload(Array.from(this.files));
-            }
+        document.getElementById('file-input').addEventListener('change', function () {
+            if (this.files.length > 0) interceptUpload(Array.from(this.files));
         });
 
-        const zone = document.getElementById('upload-zone');
-        zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
-        zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
-        zone.addEventListener('drop', e => {
+        // Global drag-and-drop on body
+        document.body.addEventListener('dragover', e => { e.preventDefault(); document.body.classList.add('dragover'); });
+        document.body.addEventListener('dragleave', e => { if (!e.relatedTarget || !document.contains(e.relatedTarget)) document.body.classList.remove('dragover'); });
+        document.body.addEventListener('drop', e => {
             e.preventDefault();
-            zone.classList.remove('dragover');
-            if (e.dataTransfer.files.length > 0) {
-                interceptUpload(Array.from(e.dataTransfer.files));
-            }
+            document.body.classList.remove('dragover');
+            if (e.dataTransfer.files.length > 0) interceptUpload(Array.from(e.dataTransfer.files));
         });
 
         function interceptUpload(files) {
@@ -491,7 +534,9 @@
                 } catch (e) { showToast('Upload failed: ' + e, 'error'); }
             }
             await loadFiles();
+            await loadTags();
             await loadStats();
+            renderFilterBar();
         }
 
         async function checkDuplicate(filename) {
