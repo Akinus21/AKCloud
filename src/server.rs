@@ -31,8 +31,8 @@ let app = Router::new()
 
         .route("/api/file/:id", get(get_file))
         .route("/api/file/:id/tags", get(get_file_tags))
-        .route("/api/file/:path", delete(delete_file))
-        .route("/api/file/:path/download", get(download_file))
+        .route("/api/file/:id/download", get(download_file))
+        .route("/api/file/:id", delete(delete_file))
 
         .route("/api/tags", get(list_tags))
         .route("/api/tags", post(create_tag))
@@ -113,16 +113,16 @@ async fn search_files(
 
 async fn get_file(
     State(_state): State<Arc<AppState>>,
-    Path(id): Path<i64>,
+    Path(id): Path<String>,
 ) -> impl IntoResponse {
     Json(json!({ "error": "not implemented" }))
 }
 
 async fn delete_file(
     State(state): State<Arc<AppState>>,
-    Path(path): Path<String>,
+    Path(id): Path<String>,
 ) -> impl IntoResponse {
-    match state.db.delete_file(&path).await {
+    match state.db.delete_file(&id).await {
         Ok(_) => Json(json!({ "deleted": true })).into_response(),
         Err(e) => {
             tracing::error!("Error deleting file: {}", e);
