@@ -340,10 +340,10 @@ impl Database {
                JOIN tags t ON ft.tag_id = t.id
                WHERE LOWER(t.name) IN ({0})
                GROUP BY f.id
-               HAVING COUNT(DISTINCT LOWER(t.name)) = {1}
+               HAVING COUNT(DISTINCT LOWER(t.name)) = ?
                ORDER BY f.updated_at DESC
-               LIMIT {2} OFFSET {3}",
-            placeholders, n, limit, offset
+               LIMIT ? OFFSET ?",
+            placeholders
         );
 
         let lowered: Vec<String> = tag_names.iter().map(|t| t.to_lowercase()).collect();
