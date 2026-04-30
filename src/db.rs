@@ -324,6 +324,7 @@ impl Database {
         limit: i64,
         offset: i64,
     ) -> Result<Vec<FileRecord>> {
+        let tag_name = tag_name.to_lowercase();
         let conn = self.conn.lock();
 
         let mut stmt = conn.prepare(
@@ -337,7 +338,7 @@ impl Database {
         )?;
 
         let records = stmt
-            .query_map(params![tag_name, limit, offset], |row| {
+            .query_map(params![&tag_name, limit, offset], |row| {
                 Ok(FileRecord {
                     id: row.get(0)?,
                     path: row.get(1)?,
@@ -395,16 +396,17 @@ impl Database {
     }
 
     pub async fn create_tag(&self, name: &str, color: &str) -> Result<TagRecord> {
+        let name = name.to_lowercase();
         let conn = self.conn.lock();
 
         conn.execute(
             "INSERT INTO tags (name, color) VALUES (?1, ?2) ON CONFLICT(name) DO UPDATE SET color = excluded.color",
-            params![name, color],
+            params![&name, color],
         )?;
 
         let record = conn.query_row(
             "SELECT id, name, color, count, created_at FROM tags WHERE name = ?1",
-            params![name],
+            params![&name],
             |row| {
                 Ok(TagRecord {
                     id: row.get(0)?,
@@ -441,6 +443,7 @@ impl Database {
     }
 
     pub async fn delete_tag(&self, name: &str) -> Result<bool> {
+        let name = name.to_lowercase();
         let conn = self.conn.lock();
 
         let deleted = conn.execute("DELETE FROM tags WHERE name = ?1", params![name])?;
@@ -449,6 +452,7 @@ impl Database {
     }
 
     pub async fn tag_file(&self, file_id: i64, tag_name: &str) -> Result<()> {
+        let tag_name = tag_name.to_lowercase();
         let conn = self.conn.lock();
 
         conn.execute(
@@ -479,6 +483,7 @@ impl Database {
     }
 
     pub async fn untag_file(&self, file_id: i64, tag_name: &str) -> Result<()> {
+        let tag_name = tag_name.to_lowercase();
         let conn = self.conn.lock();
 
         let tag_id: Option<i64> = conn
