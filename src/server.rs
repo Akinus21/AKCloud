@@ -8,6 +8,7 @@ use axum::{
     routing::{delete, get, post, put},
     Json, Router,
 };
+use bytes::Bytes;
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -534,6 +535,10 @@ async fn sync_upload_file(
             .ok();
 
         return Json(json!({ "success": true, "hash": hash })).into_response();
+    }
+
+    if body.is_empty() {
+        return Json(json!({ "error": "No file provided" })).into_response();
     }
 
     Json(json!({ "error": "No file provided" })).into_response()
