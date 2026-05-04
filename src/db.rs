@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use parking_lot::Mutex;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
@@ -296,7 +296,7 @@ impl Database {
 
         let mut stmt = conn.prepare(
             "SELECT id, path, name, size, hash, mtime, created_at, updated_at 
-             FROM files ORDER BY updated_at DESC LIMIT ?1 OFFSET ?2",
+             FROM files ORDER BY name ASC LIMIT ?1 OFFSET ?2",
         )?;
 
         let records = stmt
