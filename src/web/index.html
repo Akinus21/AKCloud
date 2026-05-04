@@ -233,6 +233,16 @@
     </div>
 
     <script>
+        window.__AKCLOUD_API_KEY__ = '';
+
+        function apiFetch(url, opts = {}) {
+            if (window.__AKCLOUD_API_KEY__) {
+                opts.headers = opts.headers || {};
+                opts.headers['X-Api-Key'] = window.__AKCLOUD_API_KEY__;
+            }
+            return fetch(url, opts);
+        }
+
         const state = { files: [], tags: [], searchQuery: '', selectedFile: null, activeTagFilters: [] };
         const fileIcons = { image: '🖼️', video: '🎬', audio: '🎵', document: '📄', code: '💻', archive: '📦', web: '🌐' };
         const settings = loadSettings();
@@ -282,7 +292,7 @@
                 } else {
                     url = '/api/files?limit=100';
                 }
-                const res = await fetch(url);
+                const res = await apiFetch(url);
                 if (!res.ok) {
                     grid.innerHTML = '<div class="empty">HTTP ' + res.status + ' on ' + url + '</div>';
                     console.error('loadFiles HTTP error:', res.status, url);
@@ -304,11 +314,11 @@
         }
 
         async function loadTags() {
-            try { const res = await fetch('/api/tags'); state.tags = await res.json(); renderTags(); } catch (e) { console.error(e); }
+            try { const res = await apiFetch('/api/tags'); state.tags = await res.json(); renderTags(); } catch (e) { console.error(e); }
         }
 
         async function loadStats() {
-            try { const res = await fetch('/api/stats'); const stats = await res.json(); document.getElementById('stats').innerHTML = '<span>' + stats.total_files + ' files</span><span>' + formatSize(stats.total_size) + '</span>'; } catch (e) { console.error(e); }
+            try { const res = await apiFetch('/api/stats'); const stats = await res.json(); document.getElementById('stats').innerHTML = '<span>' + stats.total_files + ' files</span><span>' + formatSize(stats.total_size) + '</span>'; } catch (e) { console.error(e); }
         }
 
         function renderFiles() {
@@ -366,7 +376,7 @@
 
         async function loadPanelTags(fileId) {
             try {
-                const res = await fetch(`/api/file/${fileId}/tags`);
+                const res = await apiFetch(`/api/file/${fileId}/tags`);
                 const tags = await res.json();
                 const container = document.getElementById('panel-tags');
                 if (!tags || tags.length === 0) {
@@ -390,7 +400,7 @@
             const fileId = state.selectedFile.id;
             for (const tag of tags) {
                 try {
-                    await fetch(`/api/file-tags/${fileId}/${encodeURIComponent(tag)}`, { method: 'PUT' });
+                    await apiFetch(`/api/file-tags/${fileId}/${encodeURIComponent(tag)}`, { method: 'PUT' });
                 } catch (e) { console.error(e); }
             }
             input.value = '';
@@ -402,7 +412,7 @@
 
         async function panelRemoveTag(fileId, tagName) {
             try {
-                await fetch(`/api/file-tags/${fileId}/${encodeURIComponent(tagName)}`, { method: 'DELETE' });
+                await apiFetch(`/api/file-tags/${fileId}/${encodeURIComponent(tagName)}`, { method: 'DELETE' });
             } catch (e) { console.error(e); }
             await loadPanelTags(fileId);
             await loadTags();
@@ -422,7 +432,7 @@
             if (!state.selectedFile) return;
             if (!confirm('Delete "' + state.selectedFile.name + '"?')) return;
             try {
-                await fetch(`/api/file/${encodeURIComponent(state.selectedFile.path)}`, { method: 'DELETE' });
+                await apiFetch(`/api/file/${encodeURIComponent(state.selectedFile.path)}`, { method: 'DELETE' });
                 showToast('Deleted: ' + state.selectedFile.name);
                 closeFilePanel();
                 await loadFiles();
@@ -470,7 +480,7 @@
         async function deleteTag(tagName) {
             if (!confirm('Delete tag "' + tagName + '" from all files?')) return;
             try {
-                await fetch('/api/tags/' + encodeURIComponent(tagName), { method: 'DELETE' });
+                await apiFetch('/api/tags/' + encodeURIComponent(tagName), { method: 'DELETE' });
                 showToast('Tag deleted: ' + tagName);
                 await loadTags();
                 await loadFiles();
@@ -541,12 +551,12 @@
                 const formData = new FormData();
                 formData.append('file', fileToUpload);
                 try {
-                    const res = await fetch('/api/files', { method: 'POST', body: formData });
+                    const res = await apiFetch('/api/files', { method: 'POST', body: formData });
                     const data = await res.json();
                     if (data.success) {
                         showToast('Uploaded: ' + data.filename);
                         for (const tag of tags) {
-                            await fetch(`/api/file-tags/${data.id}/${encodeURIComponent(tag)}`, { method: 'PUT' }).catch(e => console.error(e));
+                            await apiFetch(`/api/file-tags/${data.id}/${encodeURIComponent(tag)}`, { method: 'PUT' }).catch(e => console.error(e));
                         }
                     } else {
                         showToast(data.error || 'Upload failed', 'error');
@@ -561,7 +571,7 @@
 
         async function checkDuplicate(filename) {
             try {
-                const res = await fetch(`/api/files/search?q=${encodeURIComponent(filename)}&limit=5`);
+                const res = await apiFetch(`/api/files/search?q=${encodeURIComponent(filename)}&limit=5`);
                 const data = await res.json();
                 const files = data.files || [];
                 return files.some(f => f.name === filename);
@@ -659,7 +669,7 @@
             if (settings.showHash) toggleEl.classList.add('active'); else toggleEl.classList.remove('active');
             document.getElementById('settings-default-tags').value = settings.defaultTags;
             document.getElementById('settings-max-size').value = settings.maxSizeMB;
-            fetch('/api/stats').then(r => r.json()).then(stats => {
+            apiFetch('/api/stats').then(r => r.json()).then(stats => {
                 document.getElementById('settings-stats').innerHTML = 
                     `<div class="detail-row"><span class="label">Total files</span><span>${stats.total_files}</span></div>` +
                     `<div class="detail-row"><span class="label">Total size</span><span>${formatSize(stats.total_size)}</span></div>` +

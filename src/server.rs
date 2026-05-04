@@ -1,7 +1,9 @@
 use anyhow::Result;
 use axum::{
     body::Body,
-    extract::{DefaultBodyLimit, Multipart, Path, Query, State},
+    extract::{DefaultBodyLimit, Multipart, Path, Query, Request, State},
+    http::StatusCode,
+    middleware::Next,
     response::{Html, IntoResponse, Response},
     routing::{delete, get, post, put},
     Json, Router,
@@ -24,25 +26,30 @@ pub async fn create_router(db: Database, config: Config) -> Result<Router> {
     let app = Router::new()
         .route("/", get(serve_index))
         .route("/health", get(health_check))
-        .route("/api/files", get(list_files))
-        .route("/api/files", post(upload_file))
-        .route("/api/files/search", get(search_files))
-        .route("/api/files/tag/:tag", get(list_files_by_tag))
-        .route("/api/files/by-tags", get(list_files_by_tags))
-        .route("/api/file/:id", get(get_file))
-        .route("/api/file/:id/tags", get(get_file_tags))
-        .route("/api/file/:id/download", get(download_file))
-        .route("/api/file/:id", delete(delete_file))
-        .route("/api/tags", get(list_tags))
-        .route("/api/tags", post(create_tag))
-        .route("/api/tags/:name", delete(remove_tag))
-        .route("/api/file-tags/:file_id/:tag", put(tag_file))
-        .route("/api/file-tags/:file_id/:tag", delete(untag_file))
-        .route("/api/stats", get(get_stats))
-        .route("/api/sync/manifest", get(get_sync_manifest))
-        .route("/api/sync/files/:path", post(sync_upload_file))
-        .route("/api/sync/files/:path", get(sync_download_file))
-        .layer(DefaultBodyLimit::max(1024 * 1024 * 500))
+        .nest(
+            "/api",
+            Router::new()
+                .route("/files", get(list_files))
+                .route("/files", post(upload_file))
+                .route("/files/search", get(search_files))
+                .route("/files/tag/:tag", get(list_files_by_tag))
+                .route("/files/by-tags", get(list_files_by_tags))
+                .route("/file/:id", get(get_file))
+                .route("/file/:id/tags", get(get_file_tags))
+                .route("/file/:id/download", get(download_file))
+                .route("/file/:id", delete(delete_file))
+                .route("/tags", get(list_tags))
+                .route("/tags", post(create_tag))
+                .route("/tags/:name", delete(remove_tag))
+                .route("/file-tags/:file_id/:tag", put(tag_file))
+                .route("/file-tags/:file_id/:tag", delete(untag_file))
+                .route("/stats", get(get_stats))
+                .route("/sync/manifest", get(get_sync_manifest))
+                .route("/sync/files/:path", post(sync_upload_file))
+                .route("/sync/files/:path", get(sync_download_file))
+                .layer(axum::middleware::from_fn_with_state(state.clone(), api_key_middleware))
+                .with_state(state.clone()),
+        )
         .with_state(state);
 
     Ok(app)
@@ -54,8 +61,57 @@ pub struct AppState {
     pub config: Config,
 }
 
-async fn serve_index() -> impl IntoResponse {
-    Html(include_str!("web/index.html"))
+async fn api_key_middleware(
+    State(state): State<Arc<AppState>>,
+    req: Request,
+    next: Next,
+) -> Response {
+    // Allow health check without auth
+    if req.uri().path() == "/health" {
+        return next.run(req).await;
+    }
+
+    // Check Authorization: Bearer <key> or X-Api-Key: <key>
+    let auth_header = req
+        .headers()
+        .get("authorization")
+        .and_then(|v| v.to_str().ok());
+
+    let mut key = auth_header
+        .and_then(|h| h.strip_prefix("Bearer "))
+        .or_else(|| auth_header.and_then(|h| h.strip_prefix("bearer ")))
+        .map(|s| s.to_string());
+
+    if key.is_none() {
+        key = req
+            .headers()
+            .get("x-api-key")
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.to_string());
+    }
+
+    let valid = key.map_or(false, |k| {
+        state.config.server.api_keys.iter().any(|ak| ak.key == k)
+    });
+
+    if !valid {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({ "error": "Invalid or missing API key" })),
+        )
+            .into_response();
+    }
+
+    next.run(req).await
+}
+
+async fn serve_index(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    let html = include_str!("web/index.html");
+    let api_key = state.config.server.api_keys.first()
+        .map(|k| k.key.as_str())
+        .unwrap_or("");
+    let html = html.replace("window.__AKCLOUD_API_KEY__ = '';", &format!("window.__AKCLOUD_API_KEY__ = '{}';", api_key));
+    Html(html)
 }
 
 async fn health_check() -> impl IntoResponse {
