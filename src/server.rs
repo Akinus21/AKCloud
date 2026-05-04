@@ -16,7 +16,7 @@ use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
 use tokio_util::io::ReaderStream;
 
-use crate::config::Config;
+use crate::config::{self, Config};
 use crate::db::{Database, FileRecord, SearchResult, Stats, TagRecord};
 use crate::tagger::compute_file_hash;
 
@@ -47,6 +47,9 @@ pub async fn create_router(db: Database, config: Config) -> Result<Router> {
                 .route("/sync/manifest", get(get_sync_manifest))
                 .route("/sync/files/:path", post(sync_upload_file))
                 .route("/sync/files/:path", get(sync_download_file))
+                .route("/keys", get(list_keys))
+                .route("/keys", post(create_key))
+                .route("/keys/:name", delete(delete_key))
                 .layer(axum::middleware::from_fn_with_state(state.clone(), api_key_middleware))
                 .with_state(state.clone()),
         )
@@ -575,4 +578,63 @@ async fn sync_download_file(
                 Json(json!({ "error": "Failed to build response" })).into_response()
             }),
     )
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateKeyRequest {
+    name: String,
+    read_only: Option<bool>,
+}
+
+async fn list_keys(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    let keys: Vec<_> = state.config.server.api_keys.iter()
+        .map(|k| json!({ "name": k.name, "key": k.key, "read_only": k.read_only }))
+        .collect();
+    Json(keys).into_response()
+}
+
+async fn create_key(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<CreateKeyRequest>,
+) -> impl IntoResponse {
+    let new_key = config::ApiKey {
+        name: payload.name,
+        key: uuid::Uuid::new_v4().to_string(),
+        read_only: payload.read_only.unwrap_or(false),
+    };
+
+    state.config.server.api_keys.push(new_key.clone());
+
+    if let Err(e) = save_config(&state.config) {
+        tracing::error!("Failed to save config: {}", e);
+        return Json(json!({ "error": "Failed to save config" })).into_response();
+    }
+
+    Json(json!({ "name": new_key.name, "key": new_key.key, "read_only": new_key.read_only })).into_response()
+}
+
+async fn delete_key(
+    State(state): State<Arc<AppState>>,
+    Path(name): Path<String>,
+) -> impl IntoResponse {
+    let initial_len = state.config.server.api_keys.len();
+    state.config.server.api_keys.retain(|k| k.name != name);
+
+    if state.config.server.api_keys.len() == initial_len {
+        return Json(json!({ "error": "Key not found" })).into_response();
+    }
+
+    if let Err(e) = save_config(&state.config) {
+        tracing::error!("Failed to save config: {}", e);
+        return Json(json!({ "error": "Failed to save config" })).into_response();
+    }
+
+    Json(json!({ "deleted": true })).into_response()
+}
+
+fn save_config(config: &config::Config) -> Result<(), Box<dyn std::error::Error>> {
+    let config_dir = config::get_config_dir();
+    let config_path = config_dir.join("config.toml");
+    std::fs::write(&config_path, toml::to_string_pretty(config)?)?;
+    Ok(())
 }
