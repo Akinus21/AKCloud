@@ -27,7 +27,7 @@ Local developers should **not** install Rust globally; rely on the CI for compil
 | Homebrew tap        | *(none configured)* |
 | Webhook endpoint    | `https://webhook.akinus21.com/webhook/akcloud-build` |
 
-**Important:** The CI workflow automatically runs the above command, packages the binary, and pushes it to the webhook URL. Do **not** run `cargo install` locally.
+**Important:** The CI workflow automatically runs the above command, packages the binary, and pushes it to the webhook URL. **Do NOT install Rust locally or run `cargo build` on this machine.** All builds happen in GitHub Actions only.
 
 If you need to verify a change without waiting for CI:
 
