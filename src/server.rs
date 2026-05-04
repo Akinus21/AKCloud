@@ -23,38 +23,33 @@ use crate::tagger::compute_file_hash;
 pub async fn create_router(db: Database, config: Config) -> Result<Router> {
     let state = Arc::new(AppState { db, config });
 
-    // Public routes — no auth required (browser UI)
-    let public_api = Router::new()
-        .route("/files", get(list_files))
-        .route("/files/search", get(search_files))
-        .route("/files/tag/:tag", get(list_files_by_tag))
-        .route("/files/by-tags", get(list_files_by_tags))
-        .route("/file/:id", get(get_file))
-        .route("/file/:id/tags", get(get_file_tags))
-        .route("/file/:id/download", get(download_file))
-        .route("/tags", get(list_tags))
-        .route("/stats", get(get_stats))
-        .with_state(state.clone());
-
-    // Protected routes — API key required (sync clients, web UI mutations)
-    let protected_api = Router::new()
-        .route("/files", post(upload_file))
-        .route("/file/:id", delete(delete_file))
-        .route("/tags", post(create_tag))
-        .route("/tags/:name", delete(remove_tag))
-        .route("/file-tags/:file_id/:tag", put(tag_file))
-        .route("/file-tags/:file_id/:tag", delete(untag_file))
-        .route("/sync/manifest", get(get_sync_manifest))
-        .route("/sync/files/:path", post(sync_upload_file))
-        .route("/sync/files/:path", get(sync_download_file))
-        .layer(axum::middleware::from_fn_with_state(state.clone(), api_key_middleware))
-        .with_state(state.clone());
-
     let app = Router::new()
         .route("/", get(serve_index))
         .route("/health", get(health_check))
-        .nest("/api", public_api)
-        .nest("/api", protected_api)
+        .nest(
+            "/api",
+            Router::new()
+                .route("/files", get(list_files))
+                .route("/files", post(upload_file))
+                .route("/files/search", get(search_files))
+                .route("/files/tag/:tag", get(list_files_by_tag))
+                .route("/files/by-tags", get(list_files_by_tags))
+                .route("/file/:id", get(get_file))
+                .route("/file/:id/tags", get(get_file_tags))
+                .route("/file/:id/download", get(download_file))
+                .route("/file/:id", delete(delete_file))
+                .route("/tags", get(list_tags))
+                .route("/tags", post(create_tag))
+                .route("/tags/:name", delete(remove_tag))
+                .route("/file-tags/:file_id/:tag", put(tag_file))
+                .route("/file-tags/:file_id/:tag", delete(untag_file))
+                .route("/stats", get(get_stats))
+                .route("/sync/manifest", get(get_sync_manifest))
+                .route("/sync/files/:path", post(sync_upload_file))
+                .route("/sync/files/:path", get(sync_download_file))
+                .layer(axum::middleware::from_fn_with_state(state.clone(), api_key_middleware))
+                .with_state(state.clone()),
+        )
         .with_state(state);
 
     Ok(app)
@@ -71,8 +66,10 @@ async fn api_key_middleware(
     req: Request,
     next: Next,
 ) -> Response {
-    // Allow health check without auth
-    if req.uri().path() == "/health" {
+    let path = req.uri().path();
+
+    // Allow health check and download routes without auth (browser downloads)
+    if path == "/health" || path.contains("/download") {
         return next.run(req).await;
     }
 
