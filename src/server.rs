@@ -485,7 +485,7 @@ async fn download_file(
 async fn sync_upload_file(
     State(state): State<Arc<AppState>>,
     Path(path): Path<String>,
-    body: bytes::Bytes,
+    mut multipart: Multipart,
 ) -> impl IntoResponse {
     let upload_path = state.config.storage.upload_path.clone();
     let filepath = upload_path.join(&path);
@@ -498,16 +498,26 @@ async fn sync_upload_file(
         }
     }
 
-    let mut file = match File::create(&filepath).await {
-        Ok(f) => f,
-        Err(e) => {
-            tracing::error!("Failed to create file: {}", e);
-            return Json(json!({ "error": format!("Failed to create file: {}", e) }))
-                .into_response();
-        }
-    };
+    while let Some(field) = multipart.next_field().await.unwrap() {
+        let data = match field.bytes().await {
+            Ok(d) => d,
+            Err(e) => {
+                tracing::error!("Failed to read field: {}", e);
+                return Json(json!({ "error": format!("Failed to read field: {}", e) }))
+                    .into_response();
+            }
+        };
 
-    if let Err(e) = file.write_all(&body).await {
+        let mut file = match File::create(&filepath).await {
+            Ok(f) => f,
+            Err(e) => {
+                tracing::error!("Failed to create file: {}", e);
+                return Json(json!({ "error": format!("Failed to create file: {}", e) }))
+                    .into_response();
+            }
+        };
+
+        if let Err(e) = file.write_all(&data).await {
             tracing::error!("Failed to write data: {}", e);
             return Json(json!({ "error": format!("Failed to write data: {}", e) }))
                 .into_response();
@@ -535,10 +545,6 @@ async fn sync_upload_file(
             .ok();
 
         return Json(json!({ "success": true, "hash": hash })).into_response();
-    }
-
-    if body.is_empty() {
-        return Json(json!({ "error": "No file provided" })).into_response();
     }
 
     Json(json!({ "error": "No file provided" })).into_response()
