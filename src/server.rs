@@ -13,7 +13,7 @@ use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use serde_json::json;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
 use tokio_util::io::ReaderStream;
@@ -23,7 +23,7 @@ use crate::db::{Database, FileRecord, SearchResult, Stats, TagRecord};
 use crate::tagger::compute_file_hash;
 
 pub async fn create_router(db: Database, config: Config) -> Result<Router> {
-    let state = Arc::new(AppState { db, config });
+    let state = Arc::new(AppState { db, config: Arc::new(Mutex::new(config)) });
 
     let app = Router::new()
         .route("/", get(serve_index))
@@ -63,7 +63,7 @@ pub async fn create_router(db: Database, config: Config) -> Result<Router> {
 #[derive(Clone)]
 pub struct AppState {
     pub db: Database,
-    pub config: Config,
+    pub config: Arc<Mutex<Config>>,
 }
 
 async fn api_key_middleware(
@@ -98,7 +98,7 @@ async fn api_key_middleware(
     }
 
     let valid = key.map_or(false, |k| {
-        state.config.server.api_keys.iter().any(|ak| ak.key == k)
+        state.config.lock().unwrap().server.api_keys.iter().any(|ak| ak.key == k)
     });
 
     if !valid {
@@ -114,7 +114,7 @@ async fn api_key_middleware(
 
 async fn serve_index(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let html = include_str!("web/index.html");
-    let api_key = state.config.server.api_keys.first()
+    let api_key = state.config.lock().unwrap().server.api_keys.first()
         .map(|k| k.key.as_str())
         .unwrap_or("");
     let html = html.replace("window.__AKCLOUD_API_KEY__ = '';", &format!("window.__AKCLOUD_API_KEY__ = '{}';", api_key));
@@ -355,7 +355,7 @@ async fn upload_file(
     State(state): State<Arc<AppState>>,
     mut multipart: Multipart,
 ) -> impl IntoResponse {
-    let upload_path = state.config.storage.upload_path.clone();
+    let upload_path = state.config.lock().unwrap().storage.upload_path.clone();
     tokio::fs::create_dir_all(&upload_path).await.ok();
 
     loop {
@@ -445,7 +445,7 @@ async fn download_file(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
 ) -> impl IntoResponse {
-    let upload_path = state.config.storage.upload_path.clone();
+    let upload_path = state.config.lock().unwrap().storage.upload_path.clone();
     let filepath = upload_path.join(&id);
 
     if !filepath.exists() {
@@ -487,7 +487,7 @@ async fn sync_upload_file(
     Path(path): Path<String>,
     body: Bytes,
 ) -> impl IntoResponse {
-    let upload_path = state.config.storage.upload_path.clone();
+    let upload_path = state.config.lock().unwrap().storage.upload_path.clone();
     let filepath = upload_path.join(&path);
 
     if let Some(parent) = filepath.parent() {
@@ -546,7 +546,7 @@ async fn sync_download_file(
     State(state): State<Arc<AppState>>,
     Path(path): Path<String>,
 ) -> impl IntoResponse {
-    let upload_path = state.config.storage.upload_path.clone();
+    let upload_path = state.config.lock().unwrap().storage.upload_path.clone();
     let filepath = upload_path.join(&path);
 
     if !filepath.exists() {
@@ -581,7 +581,7 @@ pub struct CreateKeyRequest {
 }
 
 async fn list_keys(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let keys: Vec<_> = state.config.server.api_keys.iter()
+    let keys: Vec<_> = state.config.lock().unwrap().server.api_keys.iter()
         .map(|k| json!({ "name": k.name, "key": k.key, "read_only": k.read_only }))
         .collect();
     Json(keys).into_response()
@@ -597,11 +597,14 @@ async fn create_key(
         read_only: payload.read_only.unwrap_or(false),
     };
 
-    state.config.server.api_keys.push(new_key.clone());
+    {
+        let mut config_guard = state.config.lock().unwrap();
+        config_guard.server.api_keys.push(new_key.clone());
 
-    if let Err(e) = save_config(&state.config) {
-        tracing::error!("Failed to save config: {}", e);
-        return Json(json!({ "error": "Failed to save config" })).into_response();
+        if let Err(e) = save_config(&config_guard) {
+            tracing::error!("Failed to save config: {}", e);
+            return Json(json!({ "error": "Failed to save config" })).into_response();
+        }
     }
 
     Json(json!({ "name": new_key.name, "key": new_key.key, "read_only": new_key.read_only })).into_response()
@@ -611,14 +614,15 @@ async fn delete_key(
     State(state): State<Arc<AppState>>,
     Path(name): Path<String>,
 ) -> impl IntoResponse {
-    let initial_len = state.config.server.api_keys.len();
-    state.config.server.api_keys.retain(|k| k.name != name);
+    let mut config_guard = state.config.lock().unwrap();
+    let initial_len = config_guard.server.api_keys.len();
+    config_guard.server.api_keys.retain(|k| k.name != name);
 
-    if state.config.server.api_keys.len() == initial_len {
+    if config_guard.server.api_keys.len() == initial_len {
         return Json(json!({ "error": "Key not found" })).into_response();
     }
 
-    if let Err(e) = save_config(&state.config) {
+    if let Err(e) = save_config(&config_guard) {
         tracing::error!("Failed to save config: {}", e);
         return Json(json!({ "error": "Failed to save config" })).into_response();
     }
