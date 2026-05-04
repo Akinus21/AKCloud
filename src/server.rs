@@ -10,6 +10,7 @@ use axum::{
 };
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 use serde_json::json;
 use std::sync::Arc;
 use tokio::fs::File;
@@ -483,7 +484,7 @@ async fn download_file(
 async fn sync_upload_file(
     State(state): State<Arc<AppState>>,
     Path(path): Path<String>,
-    mut multipart: Multipart,
+    body: bytes::Bytes,
 ) -> impl IntoResponse {
     let upload_path = state.config.storage.upload_path.clone();
     let filepath = upload_path.join(&path);
@@ -496,26 +497,16 @@ async fn sync_upload_file(
         }
     }
 
-    while let Some(field) = multipart.next_field().await.unwrap() {
-        let data = match field.bytes().await {
-            Ok(d) => d,
-            Err(e) => {
-                tracing::error!("Failed to read field: {}", e);
-                return Json(json!({ "error": format!("Failed to read field: {}", e) }))
-                    .into_response();
-            }
-        };
+    let mut file = match File::create(&filepath).await {
+        Ok(f) => f,
+        Err(e) => {
+            tracing::error!("Failed to create file: {}", e);
+            return Json(json!({ "error": format!("Failed to create file: {}", e) }))
+                .into_response();
+        }
+    };
 
-        let mut file = match File::create(&filepath).await {
-            Ok(f) => f,
-            Err(e) => {
-                tracing::error!("Failed to create file: {}", e);
-                return Json(json!({ "error": format!("Failed to create file: {}", e) }))
-                    .into_response();
-            }
-        };
-
-        if let Err(e) = file.write_all(&data).await {
+    if let Err(e) = file.write_all(&body).await {
             tracing::error!("Failed to write data: {}", e);
             return Json(json!({ "error": format!("Failed to write data: {}", e) }))
                 .into_response();
@@ -599,7 +590,7 @@ async fn create_key(
 ) -> impl IntoResponse {
     let new_key = config::ApiKey {
         name: payload.name,
-        key: uuid::Uuid::new_v4().to_string(),
+        key: Uuid::new_v4().to_string(),
         read_only: payload.read_only.unwrap_or(false),
     };
 
