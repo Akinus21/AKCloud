@@ -114,9 +114,12 @@ async fn api_key_middleware(
 
 async fn serve_index(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let html = include_str!("web/index.html");
-    let api_key = state.config.lock().unwrap().server.api_keys.first()
-        .map(|k| k.key.as_str())
-        .unwrap_or("");
+    let api_key = {
+        let config = state.config.lock().unwrap();
+        config.server.api_keys.first()
+            .map(|k| k.key.clone())
+            .unwrap_or_default()
+    };
     let html = html.replace("window.__AKCLOUD_API_KEY__ = '';", &format!("window.__AKCLOUD_API_KEY__ = '{}';", api_key));
     Html(html)
 }
