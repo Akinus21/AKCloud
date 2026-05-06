@@ -49,6 +49,7 @@ pub async fn create_router(db: Database, config: Config) -> Result<Router> {
                 .route("/sync/manifest", get(get_sync_manifest))
                 .route("/sync/files/:path", post(sync_upload_file))
                 .route("/sync/files/:path", get(sync_download_file))
+                .route("/sync/files/:path", delete(sync_delete_file))
                 .route("/keys", get(list_keys))
                 .route("/keys", post(create_key))
                 .route("/keys/:name", delete(delete_key))
@@ -575,6 +576,25 @@ async fn sync_download_file(
                 Json(json!({ "error": "Failed to build response" })).into_response()
             }),
     )
+}
+
+async fn sync_delete_file(
+    State(state): State<Arc<AppState>>,
+    Path(path): Path<String>,
+) -> impl IntoResponse {
+    match state.db.delete_file(&path).await {
+        Ok(Some(_id)) => {
+            let upload_path = state.config.lock().unwrap().storage.upload_path.clone();
+            let filepath = upload_path.join(&path);
+            tokio::fs::remove_file(&filepath).await.ok();
+            Json(json!({ "deleted": true })).into_response()
+        }
+        Ok(None) => Json(json!({ "deleted": true, "note": "not found" })).into_response(),
+        Err(e) => {
+            tracing::error!("Error deleting sync file: {}", e);
+            Json(json!({ "error": e.to_string() })).into_response()
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
